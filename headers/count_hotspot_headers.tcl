@@ -94,18 +94,24 @@ foreach file [glob $dir/*.d] {
     }
 }
 
-proc foo {a b} {
-    global count
-    if {$count($a) > $count($b)} {
-        return -1
-    } elseif {$count($a) == $count($b)} {
-        return 0
+proc sort {a b} {
+    if 0 {
+        # sort y inclusion count (FIXME -- use a command-line switch)
+        global count
+        if {$count($a) > $count($b)} {
+            return -1
+        } elseif {$count($a) == $count($b)} {
+            return 0
+        } else {
+            return 1
+        }
     } else {
-        return 1
+        # sort by name, so you can easily do a before/after diff
+        return [string comp $a $b]
     }
 }
 
-foreach name [lsort -command foo [array names count]] {
+foreach name [lsort -command sort [array names count]] {
     set lines [string trim [exec wc -l $name]]
     regsub " .*" $lines "" lines
     set impact [expr $count($name) * $lines]
