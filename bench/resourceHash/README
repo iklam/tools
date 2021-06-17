@@ -13,24 +13,41 @@ runtime-configurable param     = 0:05.26 (about 1/2 slower)
 
 This was executed on "Intel(R) Xeon(R) CPU E5-2665 0 @ 2.40GHz"
 
-$ make run
-/home/iklam/devkit/latest/bin/g++ -O3 -save-temps -o test test.cpp
+=============== modulo with const
 time ./test 0 100000000
 which = 0 v = 333150064816
-0.35user 0.00system 0:00.35elapsed 99%CPU (0avgtext+0avgdata 2824maxresident)k
-0inputs+0outputs (0major+135minor)pagefaults 0swaps
+0.36user 0.00system 0:00.36elapsed 100%CPU (0avgtext+0avgdata 2728maxresident)k
+0inputs+0outputs (0major+137minor)pagefaults 0swaps
+
+=============== modulo with variable
 time ./test 1 100000000
 which = 1 v = 333150064816
-1.18user 0.00system 0:01.18elapsed 99%CPU (0avgtext+0avgdata 2720maxresident)k
-0inputs+0outputs (0major+135minor)pagefaults 0swaps
+1.13user 0.00system 0:01.13elapsed 99%CPU (0avgtext+0avgdata 2752maxresident)k
+0inputs+0outputs (0major+136minor)pagefaults 0swaps
+
+=============== original ResourceHash with const SIZE == resourceHash.hpp
 time ./test 2 100000000
 which = 2 v = 1000000000
-2.72user 0.00system 0:02.72elapsed 99%CPU (0avgtext+0avgdata 2744maxresident)k
-0inputs+0outputs (0major+155minor)pagefaults 0swaps
+2.74user 0.00system 0:02.74elapsed 99%CPU (0avgtext+0avgdata 2840maxresident)k
+0inputs+0outputs (0major+159minor)pagefaults 0swaps
+
+=============== naive ResourceHash with variable _size == resourceHashNew.hpp
 time ./test 3 100000000
 which = 3 v = 1000000000
-5.26user 0.00system 0:05.26elapsed 99%CPU (0avgtext+0avgdata 2728maxresident)k
+5.24user 0.00system 0:05.25elapsed 99%CPU (0avgtext+0avgdata 2720maxresident)k
 0inputs+0outputs (0major+163minor)pagefaults 0swaps
+
+=============== extensible ResourceHash with const SIZE
+time ./test 4 100000000
+which = 4 v = 1000000000
+2.69user 0.00system 0:02.69elapsed 99%CPU (0avgtext+0avgdata 2848maxresident)k
+0inputs+0outputs (0major+165minor)pagefaults 0swaps
+
+=============== extensible ResourceHash with variable SIZE == resourceHashX.hpp
+time ./test 5 100000000
+which = 5 v = 1000000000
+5.25user 0.00system 0:05.25elapsed 99%CPU (0avgtext+0avgdata 2768maxresident)k
+0inputs+0outputs (0major+167minor)pagefaults 0swaps
 
 
 Reason:
