@@ -21,7 +21,7 @@ run: test
 	@echo =============== naive ResourceHash with variable _size  == resourceHashNew.hpp
 	time ./test 3 100000000
 	@echo
-	@echo =============== extensible ResourceHash with const SIZE
+	@echo =============== extensible ResourceHash with const SIZE  == resourceHashX.hpp
 	time ./test 4 100000000
 	@echo
 	@echo =============== extensible ResourceHash with variable SIZE == resourceHashX.hpp

@@ -71,10 +71,9 @@ class ResourceHashtableXBase {
   unsigned size() { return ((IMPL*)this)->size_impl(); }
 
  public:
-  ResourceHashtableXBase() {}
-
-  void init() {
-    _table = new Node*[size()];
+  ResourceHashtableXBase(unsigned the_size) {
+    // Don't call size() yet as IMPL::_size is not initialized yet
+    _table = new Node*[the_size];
   }
 
   bool contains(K const& key) const {
@@ -109,23 +108,6 @@ class ResourceHashtableXBase {
   }
 };
 
-template<
-    typename K, typename V,
-    unsigned (*HASH)  (K const&)           = primitive_hash<K>,
-    bool     (*EQUALS)(K const&, K const&) = primitive_equals<K>>
-class ResourceHashtableXVar : public ResourceHashtableXBase<ResourceHashtableXVar<K, V, HASH, EQUALS>, K, V, HASH, EQUALS> {
-  unsigned _size;
-
-
-public:
-  unsigned size_impl() { return _size; }
-
-  ResourceHashtableXVar(unsigned size) : ResourceHashtableXBase<ResourceHashtableXVar, K, V, HASH, EQUALS>() {
-    _size = size;
-    ResourceHashtableXBase<ResourceHashtableXVar, K, V, HASH, EQUALS>::init(); // must be done after this->size() is initialized;
-  }
-};
-
 
 template<
     typename K, typename V,
@@ -136,7 +118,17 @@ class ResourceHashtableXConst : public ResourceHashtableXBase<ResourceHashtableX
 public:
   unsigned size_impl() { return SIZE; }
 
-  ResourceHashtableXConst() : ResourceHashtableXBase<ResourceHashtableXConst, K, V, HASH, EQUALS>() {
-    ResourceHashtableXBase<ResourceHashtableXConst, K, V, HASH, EQUALS>::init();
-  }
+  ResourceHashtableXConst() : ResourceHashtableXBase<ResourceHashtableXConst, K, V, HASH, EQUALS>(SIZE) {}
 };
+
+template<
+    typename K, typename V,
+    unsigned (*HASH)  (K const&)           = primitive_hash<K>,
+    bool     (*EQUALS)(K const&, K const&) = primitive_equals<K>>
+class ResourceHashtableXVar : public ResourceHashtableXBase<ResourceHashtableXVar<K, V, HASH, EQUALS>, K, V, HASH, EQUALS> {
+  unsigned _size;
+public:
+  unsigned size_impl() { return _size; }
+  ResourceHashtableXVar(unsigned size) : ResourceHashtableXBase<ResourceHashtableXVar, K, V, HASH, EQUALS>(size), _size(size) {}
+};
+
