@@ -32,3 +32,25 @@ which = 3 v = 1000000000
 5.26user 0.00system 0:05.26elapsed 99%CPU (0avgtext+0avgdata 2728maxresident)k
 0inputs+0outputs (0major+163minor)pagefaults 0swaps
 
+
+Reason:
+
+Run "make test" and look at test.s:
+
+
+modulo with a constant -- gcc avoids using the expensive divq instruction
+
+	movq	%r8, %rax
+	addq	$1, %rcx
+	mulq	%rsi
+	shrq	$12, %rdx
+	imulq	$6661, %rdx, %rax
+	movq	%r8, %rdx
+
+modulo with a variable -- gcc has to use divq
+
+	movq	%r8, %rax
+	xorl	%edx, %edx
+	addq	$1, %rcx
+	divq	%rdi
+
