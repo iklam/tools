@@ -1,0 +1,7 @@
+This is a benchmark to see how much slower ResourceHashtable will
+be if we change the SIZE from a build-time constant to a runtime-configurable
+parameter.
+
+Please "diff resourceHash.hpp resourceHashNew.hpp" to see the differences.
+
+
