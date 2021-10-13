@@ -67,10 +67,14 @@ UBER_LAUNCHER      = ${APPS_DIR}/uber-launcher.jar
 UBER_LAUNCHER_SRC  = $(wildcard src/apps/uber-launcher/*.java)
 UBER_LAUNCHER_MAIN = demo.UberLauncher
 
+# This is a demo of how to load modules embedded inside an "super" jar file.
+SUPER_LAUNCHER     = ${APPS_DIR}/super-launcher.jar
+SUPER_LAUNCHER_SRC = $(wildcard src/apps/super-launcher/*.java)
+SUPER_LAUNCHER_MAIN= demo.SuperLauncher
 
 ALL_MODULES = ${SIMPLE_MODULE} ${LIB_MODULE} ${COMPLEX_MODULE}
 
-all: ${ALL_MODULES} ${PATH_LAUNCHER} ${UBER_LAUNCHER}
+all: ${ALL_MODULES} ${PATH_LAUNCHER} ${UBER_LAUNCHER} ${SUPER_LAUNCHER}
 
 ${SIMPLE_MODULE}: ${SIMPLE_MODULE_SRC} ${SIMPLE_MODULE_RES}
 	rm -rf ${TMP_CLASSES}
@@ -78,7 +82,7 @@ ${SIMPLE_MODULE}: ${SIMPLE_MODULE_SRC} ${SIMPLE_MODULE_RES}
 	${JAVAC} -d ${TMP_CLASSES} ${SIMPLE_MODULE_SRC}
 	cp ${SIMPLE_MODULE_RES} ${TMP_CLASSES}/com/simple
 	mkdir -p `dirname $@`
-	${JAR} cvf $@ -C ${TMP_CLASSES} .
+	${JAR} --main-class=com.simple.Simple -c -f $@ -C ${TMP_CLASSES} .
 
 ${LIB_MODULE}: ${LIB_MODULE_SRC} ${LIB_MODULE_RES}
 	rm -rf ${TMP_CLASSES}
@@ -110,10 +114,27 @@ ${UBER_LAUNCHER}: ${UBER_LAUNCHER_SRC} ${ALL_MODULES}
 	mkdir -p `dirname $@`
 	${JAR} cvf $@ -C ${TMP_CLASSES} . -C ${BUILD_DIR} modules
 
+${SUPER_LAUNCHER}: ${SUPER_LAUNCHER_SRC} ${ALL_MODULES}
+	rm -rf ${TMP_CLASSES}
+	mkdir -p ${TMP_CLASSES}
+	${JAVAC} -d ${TMP_CLASSES} ${SUPER_LAUNCHER_SRC}
+	@echo -- create exploded modules under the ${TMP_CLASSES}/modules/ directory
+	mkdir -p ${TMP_CLASSES}/modules
+	@for i in `cd ${BUILD_DIR}/modules; echo *.jar`; do \
+		subdir=${TMP_CLASSES}/modules/`basename $$i .jar` ; \
+		echo Expanding $$subdir; \
+		mkdir -p $$subdir;  \
+		cp ${BUILD_DIR}/modules/$$i $$subdir; \
+		(cd $$subdir; ${JAR} xvf $$i; rm $$i); \
+	done
+	mkdir -p `dirname $@`
+	${JAR} cvf $@ -C ${TMP_CLASSES} .
+
+
 #==============================
 # Traditional way of running Jigsaw modular apps using "java --module-path"
 r0 run-simple: ${SIMPLE_MODULE}
-	${JAVA} --module-path=${MODULES_DIR} -m com.simple/com.simple.Simple
+	${JAVA} --module-path=${MODULES_DIR} -m com.simple
 
 r1 run-complex: ${COMPLEX_MODULE}
 	${JAVA} --module-path=${MODULES_DIR} -m com.complex/com.complex.Complex
@@ -153,6 +174,19 @@ r5 run-simple-with-uber-launcher: ${UBER_LAUNCHER} ${ALL_MODULES}
 
 r6 run-complex-with-uber-launcher: ${UBER_LAUNCHER} ${ALL_MODULES}
 	${JAVA} -cp ${UBER_LAUNCHER} ${UBER_LAUNCHER_MAIN} modules com.complex com.complex.Complex
+
+
+r7 run-simple-with-super-launcher: ${SUPER_LAUNCHER}
+	${JAVA} -cp ${SUPER_LAUNCHER} ${SUPER_LAUNCHER_MAIN} modules com.simple com.simple.Simple
+
+r8 run-complex-with-super-launcher: ${SUPER_LAUNCHER} ${ALL_MODULES}
+	${JAVA} -cp ${SUPER_LAUNCHER} ${SUPER_LAUNCHER_MAIN} modules com.complex com.complex.Complex
+
+list-uber: ${UBER_LAUNCHER} 
+	${JAR} tf ${UBER_LAUNCHER} | sort | grep -v '/$$'
+
+list-super: ${SUPER_LAUNCHER} 
+	${JAR} tf ${SUPER_LAUNCHER} | sort | grep -v '/$$'
 
 clean:
 	rm -rf build

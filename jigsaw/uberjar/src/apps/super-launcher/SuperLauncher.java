@@ -31,28 +31,62 @@ import java.util.*;
 import java.util.zip.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.nio.file.*;
 
-public class UberLauncher {
+// A simplified version of ../uber-launcher/UberLauncher.java
+//
+// Instead of storing the modules as JAR files inside a JAR file, we store the exploded version of the modules. E.g.
+//
+// $ jar tf tf build/apps/super-launcher.jar | sort | grep -v '/$'
+// demo/SuperJarModuleFinder.class
+// demo/SuperJarModuleReader.class
+// demo/SuperJarModuleReference.class
+// demo/SuperLauncher.class
+// META-INF/MANIFEST.MF
+//
+// modules/com.complex/com/complex/Complex.class
+// modules/com.complex/com/complex/myresource.txt
+// modules/com.complex/META-INF/MANIFEST.MF
+// modules/com.complex/module-info.class
+//
+// modules/com.lib/com/lib/Lib.class
+// modules/com.lib/com/lib/libresource.txt
+// modules/com.lib/META-INF/MANIFEST.MF
+// modules/com.lib/module-info.class
+//
+// modules/com.simple/com/simple/myresource.txt
+// modules/com.simple/com/simple/Simple.class
+// modules/com.simple/com/simple/Simple$Foo.class
+// modules/com.simple/META-INF/MANIFEST.MF
+// modules/com.simple/module-info.class
+//
+// The code source URI of the classes looks like this:
+//
+// jar:file:{jarfile}/!/modules/{module_nam}/{class_binary_name}.class
+//
+// E.g.
+//
+// jar:file:///ws/tools/jigsaw/uberjar/build/apps/super-launcher.jar!/modules/com.lib/com/lib/Lib.class
+//
+public class SuperLauncher {
     public static void main(String args[]) throws Exception {
-        String modulePath = args[0]; // E.g., "modules" would refer to the /modules directory in the JAR file that contains UberLauncher.class
+        String modulePath = args[0]; // E.g., "modules" would refer to the /modules directory in the JAR file that contains SuperLauncher.class
         String mainModule = args[1]; // E.g., "com.simple"
         String mainClass  = args[2]; // E.g., "com.simple.Simple"
-        dolaunch(UberLauncher.class, modulePath, mainModule, mainClass);
+        dolaunch(SuperLauncher.class, modulePath, mainModule, mainClass);
     }
 
-
     public static void dolaunch(Class callerClass, String modulesDir, String mainModule, String mainClass) throws Exception {
-        UberJarReader.initialize();
         URL locationURL = callerClass.getProtectionDomain().getCodeSource().getLocation();
         String jarPath =  locationURL.getPath();
 
         File jarFile = new File(jarPath);
-        UberJarModuleFinder mf = new UberJarModuleFinder(jarFile, modulesDir);
+        SuperJarModuleFinder mf = new SuperJarModuleFinder(jarFile, modulesDir);
 
         // Create a new Configuration for a new module layer deriving from the boot
         // configuration, and resolving the "com.simple" module.
         Configuration cfg = ModuleLayer.boot().configuration().resolve(mf, ModuleFinder.of(), Set.of(mainModule));
-        ModuleLayer ml = ModuleLayer.boot().defineModulesWithOneLoader(cfg, UberLauncher.class.getClassLoader());
+        ModuleLayer ml = ModuleLayer.boot().defineModulesWithOneLoader(cfg, SuperLauncher.class.getClassLoader());
 
         System.out.println(ml.configuration());
         Class<?> clazz = ml.findLoader(mainModule).loadClass(mainClass);
@@ -62,50 +96,40 @@ public class UberLauncher {
     }
 }
 
-class UberJarModuleFinder implements ModuleFinder {
+class SuperJarModuleFinder implements ModuleFinder {
     private final Map<String, ModuleReference> allModules = new HashMap<>();
 
-    // Example: jarFile = "build/uberdemo.jar", rootDir = "modules"
-    public UberJarModuleFinder(File jarFile, String rootDir) throws IOException {
-        ZipInputStream zins;
+    // Example: jarFile = "build/apps/super-launcher.jar", rootDir = "modules"
+    public SuperJarModuleFinder(File jarFile, String rootDir) throws IOException {
+        Map<String, String> env = new HashMap<>(); 
+        // env.put("create", "true");
+
+        // locate file system by using the syntax 
+        // defined in java.net.JarURLConnection
+        URI uri = URI.create("jar:file:" + jarFile.toString());
+        FileSystem zipfs = FileSystems.newFileSystem(uri, env);
+        Path rootPath = zipfs.getPath("/" + rootDir);
+        System.out.println(rootPath);
+
+        try (Stream<Path> stream = Files.list(rootPath)) {
+            stream.filter(Files::isDirectory)
+                .forEach(p -> addModule(p));
+        }
+    }
+
+    void addModule(Path p) {
         try {
-            zins = new ZipInputStream(new FileInputStream(jarFile));
-        } catch (Throwable t) {
-            System.out.println("Unexpected : " + t);
-            t.printStackTrace();
-            System.out.println("Must be a valid JAR file: " + jarFile);
-            throw new RuntimeException(t);
-        }
+            Path moduleInfo = p.resolve("module-info.class");
+            System.out.println("FOUND Module: " + moduleInfo);
 
-        ZipEntry ze = null;
-        if (!rootDir.endsWith("/")) {
-            rootDir += "/";
-        }
-        int prefixLen = rootDir.length();
-
-        while ((ze = zins.getNextEntry()) != null) {
-            if (!ze.isDirectory()) {
-                String entryName = ze.getName();
-
-                if (entryName.startsWith(rootDir) && entryName.endsWith(".jar") &&
-                    entryName.indexOf('/', prefixLen) < 0) {
-                    String moduleName = entryName.substring(prefixLen); // skip prefix
-                    moduleName = moduleName.substring(0, moduleName.length() - 4); // trim trailing ".jar"
-                    try {
-                        String location = "ujar:file:" + jarFile + "!/" + entryName + "!/";
-                        System.out.println("FOUND Module: " + moduleName + " @ " + location);
-                        InputStream in = UberJarReader.open(location, "module-info.class");
-                        if (in != null) {
-                            ModuleDescriptor moduleDescriptor = ModuleDescriptor.read(in);
-                            System.out.println("moduleDescriptor = " + moduleDescriptor);
-                            allModules.put(moduleName, new UberJarModuleReference(moduleDescriptor, location, new URI(location)));
-                        }
-                    } catch (URISyntaxException e) {
-                        e.printStackTrace();
-                        throw new Error("Cannot happen", e);
-                    }
-                }
-            }
+            InputStream in = Files.newInputStream(moduleInfo);
+            ModuleDescriptor moduleDescriptor = ModuleDescriptor.read(in);
+            System.out.println("moduleDescriptor = " + moduleDescriptor);
+            String moduleName = p.toString();
+            moduleName = moduleName.substring(moduleName.lastIndexOf('/') + 1);
+            allModules.put(moduleName, new SuperJarModuleReference(moduleDescriptor, p, p.toUri()));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -113,9 +137,9 @@ class UberJarModuleFinder implements ModuleFinder {
     public Optional<ModuleReference> find(String name) {
         Objects.requireNonNull(name);
 
-        System.out.println("UberJarModuleFinder.find " + name);
-
         ModuleReference m = allModules.get(name);
+        System.out.println("SuperJarModuleFinder.find " + name + " = " + m);
+
         if (m != null) {
             return Optional.of(m);
         } else {
@@ -125,35 +149,36 @@ class UberJarModuleFinder implements ModuleFinder {
 
     @Override
     public Set<ModuleReference> findAll() {
-        System.out.println("UberJarModuleFinder.findAll");
+        System.out.println("SuperJarModuleFinder.findAll");
         return allModules.values().stream().collect(Collectors.toSet());
     }
 }
 
-class UberJarModuleReference extends ModuleReference {
-    String locationString;
+class SuperJarModuleReference extends ModuleReference {
+    Path rootPath;
 
     /**
      * Constructs a new instance of this class.
      */
-    public UberJarModuleReference(ModuleDescriptor descriptor,
-                                  String locationString,
-                                  URI locationURI) {
+    public SuperJarModuleReference(ModuleDescriptor descriptor,
+                                   Path rootPath,
+                                   URI locationURI) {
         super(descriptor, Objects.requireNonNull(locationURI));
-        this.locationString = locationString;
+        System.out.println("SuperJarModuleReference @ " + locationURI);
+        this.rootPath = rootPath;
     }
 
     @Override
     public ModuleReader open() throws IOException {
-        System.out.println("UberJarModuleReference.open @ " + locationString);
-        return new UberJarModuleReader(locationString);
+        System.out.println("SuperJarModuleReference.open @ " + rootPath);
+        return new SuperJarModuleReader(rootPath);
     }
 }
 
-class UberJarModuleReader implements ModuleReader {
-    String locationString;
-    UberJarModuleReader(String locationString) {
-        this.locationString = locationString;
+class SuperJarModuleReader implements ModuleReader {
+    Path rootPath;
+    SuperJarModuleReader(Path rootPath) {
+        this.rootPath = rootPath;
     }
 
     /**
@@ -177,15 +202,12 @@ class UberJarModuleReader implements ModuleReader {
      * @see ClassLoader#getResource(String)
      */
     public Optional<URI> find(String name) throws IOException {
-        URL url = UberJarReader.findResource(locationString, name);
-        try {
-            if (url != null) {
-                return Optional.of(new URI(url.toString()));
-            }
-        } catch (Exception e) {
-            Utils.unexpected(e);
+        URI uri = rootPath.resolve(name).toUri();
+        if (uri != null) {
+            return Optional.of(uri);
+        } else {
+            return Optional.empty();
         }
-        return Optional.empty();
     }
 
     /**
@@ -207,8 +229,9 @@ class UberJarModuleReader implements ModuleReader {
      *         If denied by the security manager
      */
     public Optional<InputStream> open(String name) throws IOException {
-        System.out.println("UberJarModuleReader.open @ " + locationString + " :: " + name);
-        InputStream is = UberJarReader.open(locationString, name);
+        Path p = rootPath.resolve(name);
+        System.out.println("SuperJarModuleReader.open " + name + " @ " + p.toUri());
+        InputStream is = Files.newInputStream(p);
         if (is != null) {
             return Optional.of(is);
         } else {
@@ -243,7 +266,7 @@ class UberJarModuleReader implements ModuleReader {
      *         If denied by the security manager
      */
     public Stream<String> list() throws IOException {
-        // FIXME
+        // FIXME -- use FileSystem to walk everything under rootPath
         return null; // FIXME
     }
 
