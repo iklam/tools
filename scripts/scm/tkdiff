@@ -31,6 +31,8 @@ exec wish "$0" -- ${1+"$@"}
 
 package require Tk 8.0
 
+source $env(IOISVN)/scripts/xraise.tcl
+
 # Change to t for trace info on stderr
 set g(debug) f
 
@@ -340,8 +342,17 @@ catch {tk scaling [expr {100.0 / 72}]}
 # Exit with proper code
 ###############################################################################
 proc do-exit {{returncode {}}} {
+    puts $returncode
     debug-info "do-exit ($returncode)"
-    global g
+    global g exiting
+
+    if {$returncode == {}} {
+        save_window_geom 1
+    }
+    set exiting 1
+
+    set tksvn_sticky 0
+    update_tksvn
 
     # we don't particularly care if del-tmp fails.
     catch {del-tmp}
@@ -349,6 +360,7 @@ proc do-exit {{returncode {}}} {
         set returncode $g(returnValue)
     }
     # exit with an appropriate return value
+    delete_tmp_files
     exit $returncode
 }
 
@@ -445,7 +457,7 @@ proc run-command {cmd} {
 ###############################################################################
 # Execute a command.  Die if unsuccessful.
 ###############################################################################
-proc die-unless {cmd file} {
+proc die-unless {cmd file {dontdie 0}} {
     #debug-info "die-unless ($cmd $file)"
     global opts errorCode
 
@@ -455,7 +467,7 @@ proc die-unless {cmd file} {
     set stderr [lindex $result 1]
     set exitcode [lindex $result 2]
 
-    if {$exitcode != 0} {
+    if {$exitcode != 0 && !$dontdie} {
         fatal-error "$stderr\n$stdout"
     }
 }
@@ -524,6 +536,8 @@ proc do-show-changebars {{show {}}} {
 proc do-show-ignoreblanks {{showIgn {}}} {
     global opts
     global finfo
+
+    #parray finfo
 
     if {$showIgn != {}} {
         set opts(ignoreblanks) $showIgn
@@ -720,6 +734,94 @@ proc split-conflictfile {name} {
     return "{$temp1} {$temp2} {$firstname} {$secondname}"
 }
 
+set files_to_delete {}
+
+proc get_webrev {f rev out} {
+    global env files_to_delete
+
+    set url $env(TKDIFF_WEBREV)/raw_files
+    if {"$rev" == "rBASE"} {
+        append url "/old"
+    } else {
+        append url "/new"
+    }
+    append url /$f
+
+    set env(dont_change_title_anymore) 1
+    wm title . "tkdiff $f"
+    #puts hello
+    #puts $url
+    set fd1 [open "|wget -q -O - $url"]
+    set data [read $fd1]
+    catch {close $fd1}
+
+    if {"$data" == ""} {
+        if {"$rev" == "rBASE"} {
+            set url $env(TKDIFF_WEBREV)/${f}-.html
+        } else {
+            set url $env(TKDIFF_WEBREV)/${f}.html
+        }
+
+        set fd1 [open "|wget -q -O - $url"]
+        set data [read $fd1]
+        catch {close $fd1}
+        regsub ".*<pre> *" $data "" data
+        regsub "\n *</pre>.*" $data "" data
+        regsub -all "\n *\[0-9]+ " $data \n data
+        regsub -all "&quot;" $data \" data
+        regsub -all "&gt;" $data > data
+        regsub -all "&lt;" $data < data
+        regsub -all "&#39;" $data ' data
+        regsub -all "&amp;" $data \\& data
+    }
+    set fd2 [open $out w+]
+    puts -nonewline $fd2 $data
+    close $fd2
+
+    lappend files_to_delete $out
+}
+
+proc get_hgweb {f rev out} {
+    global env files_to_delete
+
+    set url $env(TKDIFF_HGWEB)/raw-file
+    if {"$rev" == "rBASE"} {
+        append url "/$env(TKDIFF_HGWEB_PARENT)"
+    } else {
+        append url "/$env(TKDIFF_HGWEB_CHILD)"
+        puts $url
+    }
+    
+    append url /$f
+
+    set env(dont_change_title_anymore) 1
+    wm title . "tkdiff $f"
+    set fd1 [open "|wget -q -O - $url"]
+    set fd2 [open $out w+]
+    set data [read $fd1]
+    puts -nonewline $fd2 $data
+    catch {close $fd1}
+    close $fd2
+
+    lappend files_to_delete $out
+}
+
+proc get_http {f rev out} {
+    global env files_to_delete
+
+    puts $f-$rev-$out
+    set env(dont_change_title_anymore) 1
+    wm title . "tkdiff [file tail $f]"
+    set fd1 [open "|wget -q -O - $f"]
+    set fd2 [open $out w+]
+    set data [read $fd1]
+    puts -nonewline $fd2 $data
+    catch {close $fd1}
+    close $fd2
+
+    lappend files_to_delete $out
+}
+
 ###############################################################################
 # Get a revision of a file
 #   f            file name
@@ -731,6 +833,7 @@ proc get-file-rev {f index {r ""}} {
     global finfo
     global opts
     global tcl_platform
+    global env
 
     if {"$r" == ""} {
         set rev "HEAD"
@@ -769,12 +872,30 @@ proc get-file-rev {f index {r ""}} {
     set tailname [file tail $f]
 
     debug-info " $f"
+
+    catch {
+        set svninfo [exec svn info $dirname]
+    }
+
     # For CVS, if it isn't checked out there is neither a CVS nor RCS
     # directory.  It will however have a ,v suffix just like rcs.
     # There is not necessarily a RCS directory for RCS, either. The file
     # always has a ,v suffix.
 
-    if {[file isdirectory [file join $dirname CVS]]} {
+    if {[regexp {^((http)|(https))://} $f]} {
+        set finfo(lbl,$index) "$f (web $rev)"
+        set finfo(userlbl,$index) "$rev"
+        get_http $f $rev $finfo(pth,$index)
+    } elseif {[info exists env(TKDIFF_WEBREV)]} {
+        set finfo(lbl,$index) "$f (webrev $rev)"
+        set finfo(userlbl,$index) "$rev"
+        #puts $finfo(pth,$index)=finfo(pth,$index)
+        get_webrev $f $rev $finfo(pth,$index)
+    } elseif {[info exists env(TKDIFF_HGWEB)]} {
+        set finfo(lbl,$index) "$f (hgweb $rev)"
+        set finfo(userlbl,$index) "$rev"
+        get_hgweb $f $rev $finfo(pth,$index)
+    } elseif {[file isdirectory [file join $dirname CVS]]} {
         set cmd "cvs"
         if {$::tcl_platform(platform) == "windows"} {
             append cmd ".exe"
@@ -782,7 +903,7 @@ proc get-file-rev {f index {r ""}} {
         set finfo(lbl,$index) "$f (CVS $rev)"
         debug-info "  Setting lbl $finfo(lbl,$index)"
         die-unless "exec $cmd update -p $cvsopt \"$f\"" "\"$finfo(pth,$index)\""
-    } elseif {[file isdirectory [file join $dirname .svn]]} {
+    } elseif {[info exists svninfo] || [file isdirectory [file join $dirname .svn]]} {
         set cmd "svn"
         if {$::tcl_platform(platform) == "windows"} {
             append cmd ".exe"
@@ -790,8 +911,13 @@ proc get-file-rev {f index {r ""}} {
         if {"$r" == "" || "$rev" == "rBASE"} {
             set finfo(lbl,$index) "$f (SVN BASE)"
             debug-info "  Setting lbl $finfo(lbl,$index)"
-            die-unless "exec cat \"$dirname/.svn/text-base/$tailname.svn-base\"" \
-              $finfo(pth,$index)
+
+            if {![file isdirectory [file join $dirname .svn]]} {
+                die-unless "exec $cmd cat $svnopt \"$f\"" $finfo(pth,$index)
+            } else {
+                die-unless "exec cat \"$dirname/.svn/text-base/$tailname.svn-base\"" \
+                    $finfo(pth,$index)
+            }
         } else {
             set finfo(lbl,$index) "$f (SVN $rev)"
             debug-info "  Setting lbl $finfo(lbl,$index)"
@@ -856,7 +982,7 @@ proc get-file-rev {f index {r ""}} {
         debug-info "  Setting lbl $finfo(lbl,$index)"
         die-unless "exec $cmd -p $pvcsopt \"$f\"" "\"$finfo(pth,$index)\""
         filterCRCRLF $finfo(pth,$index)
-    } elseif {[info exists ::env(P4CLIENT)] || [info exists ::env(P4CONFIG)]} {
+    } elseif {0 && ([info exists ::env(P4CLIENT)] || [info exists ::env(P4CONFIG)])} {
         set cmd "p4"
         if {$::tcl_platform(platform) == "windows"} {
             append cmd ".exe"
@@ -919,10 +1045,15 @@ proc get-file-rev {f index {r ""}} {
                 append cmd ".exe"
             }
         }
-        set cmd "python2.6 c:/cygwin/bin/hg"
         set finfo(lbl,$index) "$f (HG $rev)"
         debug-info "  Setting lbl $finfo(lbl,$index)"
-        die-unless "exec $cmd cat $hgopt $f" "$finfo(pth,$index)"
+        die-unless "exec $cmd cat $hgopt $f" "$finfo(pth,$index)" 1
+    } elseif {[is_in_git_tree $dirname]} {
+        set finfo(lbl,$index) "$f (GIT $rev)"
+        regsub ^r $rev "" rev
+        #puts "rev = $rev"
+        set ff [git_full_path $f]
+        die-unless "exec git show ${rev}:$ff" "$finfo(pth,$index)" 1
     } else {
         fatal-error "File '$f' is not part of a revision control system"
     }
@@ -934,9 +1065,54 @@ proc get-file-rev {f index {r ""}} {
     }
 }
 
+proc git_full_path {f} {
+    set d .
+    foreach p [lreverse [file split [pwd]]] {
+        if {[file exists $d/.git]} {
+            break
+        }
+        set f [file join $p $f]
+        set d [file join $d ..]
+    }
+
+    puts $f
+    return $f
+}
+
 proc is_in_hg_tree {d} {
+    global env
+    if {[info exists env(TKDIFF_WEBREV)]} {
+        return 0
+    }
+    if {[info exists env(TKDIFF_HGWEB)]} {
+        return 0
+    }
+
+    set d [file join [pwd] $d]
     while {$d != "/"} {
+        #puts $d
         if {[file exists $d/.hg]} {
+            return 1
+        } else {
+            set d [file dir $d]
+        }
+    }
+    return 0
+}
+
+proc is_in_git_tree {d} {
+    global env
+    if {[info exists env(TKDIFF_WEBREV)]} {
+        return 0
+    }
+    if {[info exists env(TKDIFF_HGWEB)]} {
+        return 0
+    }
+
+    set d [file join [pwd] $d]
+    while {$d != "/"} {
+        #puts $d
+        if {[file exists $d/.git]} {
             return 1
         } else {
             set d [file dir $d]
@@ -963,7 +1139,16 @@ proc sccs-is-bk {} {
 ###############################################################################
 proc get-file {f index} {
     debug-info "get-file ($f $index)"
-    global finfo
+    global finfo env
+
+    if {[info exists env(TKDIFF_WEBREV)]} {
+        get-file-rev $f 2
+        return 0
+    }
+    if {[info exists env(TKDIFF_HGWEB)]} {
+        get-file-rev $f 2
+        return 0
+    }
 
     #set finfo(f,$index) $f
     if {[file exists $f] != 1} {
@@ -999,12 +1184,21 @@ proc commandline {} {
     global finfo
     global opts
     global g
+    global env
 
     set g(initOK) 0
     set argindex 0
     set revs 0
     set pths 0
     set lbls 0
+
+    if {[info exists env(TKDIFF_WEBREV)]} {
+        set revs 1
+        set finfo(revs,$revs) BASE
+    } elseif {[info exists env(TKDIFF_HGWEB)]} {
+        set revs 1
+        set finfo(revs,$revs) BASE
+    }
 
     # Loop through argv, storing revision args in rev and file args in
     # finfo. revs and pths are counters.
@@ -1117,7 +1311,9 @@ proc assemble-args {} {
     debug-info "assemble-args"
     global finfo
     global opts
-    global g
+    global g env
+
+    delete_tmp_files
 
     if {$g(ancfile) != ""} {
         set g(ancfileset) 1
@@ -1238,8 +1434,71 @@ proc assemble-args {} {
     }
     debug-info " $revs revs  $pths files"
 
-    wm title . "$finfo(title) - $g(name) $g(version)"
+
+    if {![info exists env(dont_change_title_anymore)]}  {
+        if {[info exists env(TKSVN_PORT)] && 0} {
+            wm title . "tkdiff $env(TKSVN_PORT)"
+        } else {
+            wm title . "$finfo(title) - $g(name) $g(version)"
+        }
+    }
     return 0
+}
+
+# ioi
+proc updateTextSelection {w} {
+    #puts $w
+    #puts [$w tag names]
+    #catch {puts [$w tag ranges sel]}
+
+    global textSelectionHasChanged
+    if {[info exists textSelectionHasChanged]} {
+        unset textSelectionHasChanged
+
+        set newsel ""
+        if {[catch {
+            set range [$w tag ranges sel]
+            if {$range != {}} {
+                set newsel [eval $w get $range]
+            }
+        } err]} {
+            puts $err
+            return
+        }
+
+        #puts --$newsel--
+        if {"$newsel" != ""} {
+            if {[catch {
+                set fd [open "|xclip -selection primary" w+]
+                puts -nonewline $fd $newsel
+                close $fd
+            } err]} {
+                puts $err
+            }
+        }
+    }
+}
+
+proc ioi-emacs-edit {text} {
+    global w finfo env
+
+    if {$text != $w(RightText)} {
+        return
+    }
+
+    set index [$text index insert]
+    if {[regsub {[.].*} $index "" index]} {
+        if {[info exists finfo(pth,2)]} {
+            set file $finfo(pth,2)
+            if {[catch {
+                #puts [pwd]
+                exec tclsh $env(IOISVN)/scripts/qq.tcl $file:$index
+                xraise emacs23 1
+            } err]} {
+                puts $err
+            }
+        }
+    }
 }
 
 ###############################################################################
@@ -1315,6 +1574,18 @@ proc create-display {} {
     # Make sure temporary files get deleted
     #bind . <Destroy> {del-tmp}
 
+    bind . <Configure> handle_window_size
+    bind . <Destroy> save_window_geom
+
+    catch {
+        set fd [open ~/.tkdiff_geom]
+        set geom [string trim [read $fd]]
+        close $fd
+        #puts "====== $geom"
+        wm geometry . $geom
+        #puts [wm geometry .]
+    }
+
     # other misc. bindings
     common-navigation $w(LeftText) $w(LeftInfo) $w(LeftCB) $w(RightText) \
       $w(RightInfo) $w(RightCB)
@@ -1336,6 +1607,8 @@ proc create-display {} {
     update idletasks
     # Need this to make the pane-resizing behave
     grid propagate $w(client) f
+
+    after 10 {set_icon . icons8-diff-files-80.png}
 }
 
 ###############################################################################
@@ -1558,13 +1831,19 @@ proc build-client {} {
       [list $w(RightText) yview]
 
 
-    text $w(LeftText) -padx 0 -wrap none -width $width -height $height \
+    text $w(LeftText) -padx 0 -wrap none -width $width -height $height -exportselection 0 \
       -borderwidth 0 -setgrid 1 -yscrollcommand [list vscroll-sync \
       "$w(LeftInfo) $w(LeftCB)" 1] -xscrollcommand [list hscroll-sync 1]
 
-    text $w(RightText) -padx 0 -wrap none -width $width -height $height \
+    text $w(RightText) -padx 0 -wrap none -width $width -height $height -exportselection 0 \
       -borderwidth 0 -setgrid 1 -yscrollcommand [list vscroll-sync \
       "$w(RightInfo) $w(RightCB)" 2] -xscrollcommand [list hscroll-sync 2]
+
+    foreach ww {Left Right} {
+        set ww $w(${ww}Text)
+        bind $ww <<Selection>> "set textSelectionHasChanged 1"
+        bind $ww <ButtonRelease-1> "updateTextSelection $ww"
+    }
 
     text $w(LeftInfo) -height 0 -padx 0 -width 6 -borderwidth 0 -setgrid 1 \
       -yscrollcommand [list vscroll-sync "$w(LeftCB) $w(LeftText)" 1]
@@ -2079,10 +2358,20 @@ proc show-find {} {
 # to the clipboard
 ###############################################################################
 proc do-copy {} {
-    clipboard clear -displayof .
-    # figure out which window has the selection...
-    catch {
-        clipboard append [selection get -displayof .]
+    if 0 {
+        clipboard clear -displayof .
+        # figure out which window has the selection...
+        catch {
+            clipboard append [selection get -displayof .]
+        }
+    }
+
+    if {[catch {
+        set fd [open "|xclip -selection primary" w+]
+        puts $fd [selection get -displayof .]
+        close $fd
+    } err]} {
+        puts $err
     }
 }
 
@@ -2390,7 +2679,7 @@ proc showTooltip {which w} {
 proc build-toolbar {} {
     debug-info "build-toolbar"
     global w g
-    global opts
+    global opts env
 
     frame $w(toolbar) -bd 0
 
@@ -2435,6 +2724,13 @@ proc build-toolbar {} {
     toolsep $toolbar.sep4
     toolsep $toolbar.sep5
     toolsep $toolbar.sep6
+
+    # The checkbox, and prev/next files
+    if {[info exists env(TKSVN_PORT)]} {
+        checkbutton $toolbar.check -text Sticky -command update_tksvn -variable tksvn_sticky
+        button $toolbar.prevfile -text PrevFile -command "do_navigate prev"
+        button $toolbar.nextfile -text NextFile -command "do_navigate next"
+    }
 
     # The combo box
     ::combobox::combobox $toolbar.combo -borderwidth 1 -editable false \
@@ -2562,7 +2858,7 @@ proc build-toolbar {} {
 
 proc pack-toolbuttons {toolbar} {
     #debug-info "pack-toolbuttons ($toolbar)"
-    global opts
+    global opts env
 
     if {$opts(toolbarIcons)} {
         set bp "im"
@@ -2570,6 +2866,11 @@ proc pack-toolbuttons {toolbar} {
         set bp "tx"
     }
 
+    if {[info exists env(TKSVN_PORT)]} {
+        pack $toolbar.check -side left -padx 2
+        pack $toolbar.prevfile -side left -padx 2
+        pack $toolbar.nextfile -side left -padx 2
+    }
     pack $toolbar.combo -side left -padx 2
     pack $toolbar.sep1 -side left -fill y -pady 2 -padx 2
     pack $toolbar.rediff_$bp -side left -padx 2
@@ -2896,12 +3197,48 @@ proc common-navigation {args} {
             do-exit
             break
         "
+        bind $widget <Home> "
+            move top
+            break
+        "
+        bind $widget <End> "
+            move bottom
+            break
+        "
+        bind $widget <h> "
+            move top
+            break
+        "
+        bind $widget <e> "
+            ioi-emacs-edit $widget
+            break
+        "
+        bind $widget <Control-1> "
+            ioi-emacs-edit $widget
+            break
+        "
+        bind $widget <t> "
+            move top
+            break
+        "
+        bind $widget <b> "
+            move bottom
+            break
+        "
         bind $widget <r> "
             recompute-diff
             break
         "
         bind $widget <Return> "
             moveNearest $widget mark insert
+            break
+        "
+        bind $widget <a> "
+            do_navigate prev
+            break
+        "
+        bind $widget <z> "
+            do_navigate next
             break
         "
 
@@ -2912,10 +3249,12 @@ proc common-navigation {args} {
             bind $widget <Alt-$key> {continue}
         }
 
-        bind $widget <Double-1> "
-            moveNearest $widget xy %x %y
-            break
-        "
+# Ioi - I find this not very useful.
+#
+#        bind $widget <Double-1> "
+#            moveNearest $widget xy %x %y
+#            break
+#        "
 
         bind $widget <Key-1> "
             do-merge-choice 1
@@ -4651,6 +4990,16 @@ proc move {value {relative 1} {setpos 1}} {
     global g
     global w
 
+    if {$value == "top"} {
+        $w(LeftText) yview moveto 0
+        $w(RightText) yview moveto 0
+        return
+    }
+    if {$value == "bottom"} {
+        $w(LeftText) yview moveto 1
+        $w(RightText) yview moveto 1
+        return
+    }
     if {$value == "first"} {
         set value 1
         set relative 0
@@ -5042,6 +5391,7 @@ proc mark-diffs {} {
 proc do-new-diff {} {
     global g
     global finfo
+    global files_to_delete
 
     debug-info "do-new-diff"
 
@@ -5052,8 +5402,7 @@ proc do-new-diff {} {
     set finfo(tmp,1) 0
     set finfo(tmp,2) 0
 
-    #foreach inf [lsort [array names finfo]] { debug-info "    $inf: \
-      $finfo($inf)" }
+    #foreach inf [lsort [array names finfo]] { debug-info "    $inf:  $finfo($inf)" }
     # Pop up the dialog to collect the args
     newDiffDialog
 
@@ -5083,6 +5432,10 @@ proc do-new-diff {} {
     #debug-info "    ...update-display from do-new-diff"
     update-display
     catch {unset g(disableSyncing)}
+
+    catch {
+        puts $files_to_delete
+    }
 }
 
 ###############################################################################
@@ -5175,6 +5528,20 @@ proc debug-info {message} {
     }
 }
 
+proc check_copyright {file} {
+    if {[file exists $file]} {
+        set fd [open $file]
+        set data [read $fd]
+        close $fd
+        if {[regexp { Copyright .c.[ 0-9,]* 20([0-9][0-9]), Oracle} $data dummy year]} {
+            set y [clock format [clock seconds] -format %y]
+            if {"$year" != "$y"} {
+                puts "****** Copyright $year should be 20$y $file"
+            }
+        }
+    }
+}
+
 ###############################################################################
 # Compute differences (start over, basically).
 ###############################################################################
@@ -5196,7 +5563,11 @@ proc rediff {} {
         }
         show-info "reading $finfo(pth,$mod)..."
         if {[catch {set hndl [open "$finfo(pth,$mod)" r]}]} {
+            global errorInfo
+            puts $errorInfo
+            puts $mod
             fatal-error "Failed to open file: $finfo(pth,$mod)"
+            
         }
         $text insert 1.0 [read $hndl]
         close $hndl
@@ -5209,6 +5580,8 @@ proc rediff {} {
     } else {
         set diffcmd "$opts(diffcmd) {$finfo(pth,1)} {$finfo(pth,2)}"
     }
+    check_copyright $finfo(pth,2)
+
     show-info "Executing \"$diffcmd\""
 
     set result [run-command "exec $diffcmd"]
@@ -5338,6 +5711,18 @@ proc rediff {} {
     $w(RightCB) configure -state disabled
 }
 
+proc delete_tmp_files {} {
+    global files_to_delete
+
+    catch {
+        foreach file $files_to_delete {
+            #puts "deleting $file"
+            catch {file delete $file}
+        }
+        set files_to_delete {}
+    }
+}
+
 ###############################################################################
 # Set the X cursor to "watch" for a window and all of its descendants.
 ###############################################################################
@@ -5386,7 +5771,6 @@ proc check-error {result output} {
 # numerically speaking.
 ###############################################################################
 proc recompute-diff {} {
-
     debug-info "recompute-diff"
     global g
     set current $g(pos)
@@ -5445,6 +5829,7 @@ proc main {} {
     global startupError
     global opts
     global waitvar
+    global env
 
     set cmd_empty [commandline]
     debug-info "  main: commandline returned $cmd_empty"
@@ -5465,7 +5850,13 @@ proc main {} {
 
     wm withdraw .
     wm protocol . WM_DELETE_WINDOW do-exit
-    wm title . "$g(name) $g(version)"
+    if {![info exists env(dont_change_title_anymore)]} {
+        if {[info exists env(TKSVN_PORT)]} {
+            wm title . "tkdiff $env(TKSVN_PORT)"
+        } else {
+            wm title . "$g(name) $g(version)"
+        }
+    }
 
     if {![catch {set windowingsystem [tk windowingsystem]}]} {
         if {$windowingsystem == "x11"} {
@@ -9546,7 +9937,157 @@ proc get_aqua_params {} {
 }
 
 ###############################################################################
+set tksvn_sticky 1
+proc update_tksvn {} {
+    global env tksvn_fd tksvn_sticky
+    if {[info exists env(TKSVN_PORT)]} {
+        if {$tksvn_sticky == 0} {
+            if {[info exists tksvn_fd]} {
+                catch {puts $tksvn_fd quit}
+                catch {flush $tksvn_fd}
+                catch {close $tksvn_fd}
+                unset tksvn_fd
+            }
+        } else {
+            set tksvn_fd [socket localhost $env(TKSVN_PORT)]
+           #puts [fconfigure $tksvn_fd]
+            fileevent $tksvn_fd readable "receive_tksvn $tksvn_fd"
+        }
+    } else {
+        set tksvn_sticky 0
+    }
+}
+
+proc do_navigate {which} {
+    global env tksvn_fd tksvn_sticky
+    if {[info exists env(TKSVN_PORT)] && [info exists tksvn_fd]} {
+        puts $tksvn_fd "$which"
+        flush $tksvn_fd
+    }
+}
+
+proc focus_me {} {
+    set id [wm frame .]
+    catch {
+        set data [exec xwininfo -id $id -children]
+        if {[regexp "1 child:\[ \r\n\t\]*(0x\[0-9a-f\]+)" $data dummy id]} {
+            exec wmctrl -i -a $id
+        }
+    }
+}
+
+proc receive_tksvn {fd} {
+    global env
+    global argv
+    global argc
+    global finfo
+    global g
+    global tksvn_sticky
+
+    set line [gets $fd]
+    if {[eof $fd] || "$line" == ""} {
+        catch {close $fd}
+        catch {unset env(TKSVN_PORT)}
+        catch {set tksvn_sticky 0}
+        return
+    }
+
+    if {[lindex $line 1] == "<key>"} {
+        set key [lindex $line 2]
+        focus_me
+        switch $key {
+            space { move 1 }
+            n     { move 1 }
+            p     { move 1 }
+            a     { do_navigate prev }
+            z     { do_navigate next }
+            r     { recompute-diff   }
+        }
+        return
+    }
+
+    #puts "-----> $line"
+    #puts ":::"
+    #parray finfo
+
+    cd [lindex $line 0]
+    set argv [lrange $line 1 end]
+    set argc [llength $argv]
+
+    #do-new-diff
+    commandline
+    assemble-args
+
+    #puts "+++"
+    #parray finfo
+    #puts "==="
+
+    set g(mergefileset) 0
+
+    after 0 {
+        #grab -global .
+        #wm withdraw .
+        after 0
+        move first
+        recompute-diff
+        check_autoraise
+        #wm deiconify .
+        #grab release .
+    }
+}
+
+proc check_autoraise {} {
+    if {[file exists /tmp/autoraise-t]} {
+        catch {
+            exec wmctrl -a [wm title .]
+        }
+    }
+}
+
+###############################################################################
+proc handle_window_size {} {
+    global afterid
+
+    if {![info exists afterid]} {
+        set afterid [after 2000 save_window_geom]
+    }
+}
+
+proc save_window_geom {{nomore 0}} {
+    global afterid nomore_geom exiting
+
+    if {[info exists exiting]} {
+        return
+    }
+    if {[info exists nomore_geom]} {
+        return
+    }
+    if {$nomore == 1} {
+        set nomore_geom 1
+        bind . <Configure> ""
+    }
+    catch {after cancel $afterid}
+    catch {unset afterid}
+
+    set cfg ~/.tkdiff_geom
+
+    catch {
+        set tmp $cfg.tmp.[pid]
+        set fd [open $tmp w+]
+        #puts "saving [wm geometry .]"
+        puts $fd [wm geometry .]
+        close $fd
+        file rename -force $tmp $cfg
+        #puts [wm geometry .]
+    }
+    catch {
+        file delete $tmp
+    }
+}
+
+###############################################################################
 
 # run the main proc
 main
+update_tksvn
 
