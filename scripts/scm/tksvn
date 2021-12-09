@@ -1,0 +1,1040 @@
+#! /usr/bin/wish
+source [file dirname [info script]]/xraise.tcl
+
+set instdir [file dirname [info script]]
+
+proc mk_buttons {istix} {
+    frame .buttons
+    frame .buttons2
+    button .reload -command loadit -text Reload
+    button .edit -command editit -text Edit
+    button .meld -command meldit -text Meld
+    button .copy -command copyit -text "Copy names"
+
+    button .prev -command do_prev -text "^"
+    button .next -command do_next -text "v"
+    label .count -text 0
+
+    if {$istix} {
+        button .listall -command list_all -text "All"
+        button .listcur -command list_current -text "Current"
+        button .listselect -command list_select -text "Selected"
+        button .listunselect -command list_unselect -text "Unselected"
+    }
+
+    pack .buttons2 -fill x
+    pack .buttons -fill x
+    pack .edit -in .buttons -fill x -side right
+    pack .meld -in .buttons -fill x -side right
+    pack .reload -in .buttons -fill x -side right
+   #pack .copy -in .buttons -fill x -side right
+
+    if {$istix} {
+        pack .listall -in .buttons2 -fill x -side right
+        pack .listcur -in .buttons2 -fill x -side right
+        pack .listselect -in .buttons2 -fill x -side right
+        pack .listunselect -in .buttons2 -fill x -side right
+
+        pack .prev -in .buttons2 -fill x -side left
+        pack .next -in .buttons2 -fill x -side left
+        pack .count -in .buttons2 -fill x -side left -padx 6
+    }
+}
+set selection ""
+
+proc selection_updated {args} {
+    global afterid_sel
+    #puts select_updated0==[info exists afterid_sel]
+    if {![info exists aftertd_sel]} {
+        set aftertd_sel [after idle do_select]
+    }
+}
+
+proc do_select {} {
+    #puts select_updated
+    global selection aftertd_sel hlist
+
+    catch {
+        unset aftertd_sel
+    }
+
+    # Don't want to use $selection as a list since it may contain illegal
+    # chars such as parenthesis
+    set list {}
+    if {[string trim $selection] != ""} {
+        foreach part [split $selection " "] {
+            set part [string tolower [string trim $part]]
+            if {$part != ""} {
+                lappend list $part
+            }
+        }
+    }
+
+    #puts $list
+    foreach child [$hlist info children] {
+        if {[llength $list] == 0} {
+            $hlist show entry $child
+        } else {
+            set matched 0
+
+            set text [$hlist item cget $child 3 -text]
+            #puts $text
+            set lower [string tolower $text]
+            foreach pat $list {
+                if {[string first $pat $lower] >= 0} {
+                    #puts a
+                    set matched 1
+                    break;
+                }
+                if {[string match $pat $lower]} {
+                    #puts b
+                    set matched 1
+                    break;
+                }
+                set m 0
+                catch {
+                    set m [regexp $pat $lower]
+                }
+                if {$m} {
+                    #puts c
+                    set matched 1
+                    break;
+                }
+            }
+
+            if {$matched} {
+                #puts "show = $child"
+                $hlist show entry $child
+            } else {
+                #puts "hide = $child"
+                $hlist hide entry $child
+            }
+        }
+    }
+}
+
+proc mkui_tix {} {
+    global hlist image_sel image_nosel sel_file sel_width sel_height selection
+
+    set sel_file  /tmp/.tksvn_sel
+
+    tixScrolledHList .b -options {
+	hlist.columns 4
+    }
+
+    set hlist [.b subwidget hlist]
+    $hlist config -separator \uFFFF -font {{DejaVu Sans Mono} -10} -selectforeground black -selectbackground #a0a0ff \
+        -browsecmd doit_hlist -highlightthickness 0
+
+    bind $hlist <ButtonRelease-1> "diffit %x %y"
+    bind $hlist <q> exit
+    bind . <q> {
+        if {[focus] != ".selection"} {
+            exit
+        }
+    }
+    foreach k {a z r n p space} {
+        foreach widget [list $hlist] {
+            bind $widget <$k> "do-launch <key> $k"
+        }       
+    }
+    #bind . <KeyPress-Return> doit
+
+    set sel_width  14
+    set sel_height 14
+    set image_nosel [image create photo]
+    $image_nosel put [generate_photo $sel_width $sel_height #a0a0a0]
+
+    set image_sel [image create photo]
+    $image_sel put [generate_photo $sel_width $sel_height #ff7070]
+
+    entry .selection -textvariable selection  -highlightthickness 0
+    pack  .selection -side top -fill both -padx 5 -pady 2
+    pack .b -expand yes -fill both -padx 2 -pady 2
+    mk_buttons 1
+    focus $hlist
+    bind $hlist <Tab> "focus .selection; break"
+    bind .selection <Tab> "focus $hlist; break"
+
+    #bind $hlist <1> "puts {%x %y--}"
+    #bind $hlist <Double-1> "puts {%x %y}"
+
+    set n [loadit]
+
+    if {$n > 20} {
+        set n 20
+    }
+
+    $hlist config -height [expr $n + 2]
+    trace add variable selection write selection_updated
+}
+
+proc mkui_tk {} {
+    global list
+
+    set list [listbox .b]
+    pack .b -expand yes -fill both
+    mk_buttons 0
+    focus $list
+
+    bind $list <Double-1> "select_tk %x %y"
+    bind $list <q> exit
+
+
+    set n [loadit]
+
+    if {$n > 20} {
+        set n 20
+    }
+
+    $list config -height [expr $n + 2]
+}
+
+proc generate_photo {width height color} {
+   set data [list]
+   for {set y 0} {$y < $height} {incr y} {
+      set row [list]
+      for {set x 0} {$x < $width} {incr x} {
+         lappend row $color
+      }
+      lappend data $row
+   }
+   return $data
+}
+
+proc do_prev {} {
+    navigate -1
+}
+
+proc do_next {} {
+    navigate 1
+}
+
+proc get_next {hlist direction child} {
+    while 1 {
+        set child [$hlist info $direction $child]
+        if {"$child" == ""} {
+            return ""
+        }
+        if {![$hlist info hidden $child]} {
+            return $child
+        }
+    }
+}
+
+proc navigate {delta} {
+    global hlist
+
+    if {[info exists hlist]} {
+        set file [$hlist info selection]
+        if {"$file" == ""} {
+            $hlist selection set [$hlist nearest 0]
+            set delta 0
+        } elseif {$delta < 0} {
+            set p [get_next $hlist prev $file]
+            if {"$p" != ""} {
+                $hlist selection clear
+                $hlist selection set $p
+                $hlist anchor clear
+            }
+        } elseif {$delta > 0} {
+            set n [get_next $hlist next $file]
+            if {"$n" != ""} {
+                $hlist selection clear
+                $hlist selection set $n
+                $hlist anchor clear
+            }
+        }
+
+        set file [$hlist info selection]
+        if {$file != ""} {
+            doit $file
+        }
+    }
+}
+
+proc find_files {} {
+    global argv
+    set s [lindex $argv 0]
+
+    if {[regexp {(http://hg.openjdk.java.net/)|(http://closedjdk.[^/]*/)} $s]} {
+        return [find_files_hgweb_mode $s]
+    } elseif {[regexp "^((http(s|)://))" $s]} {
+        return [find_files_webrev_mode $s]
+    } else {
+        return [find_files_scm_mode]
+    }
+}
+
+
+proc find_files_webrev_mode {url} {
+    global env
+    set env(TKDIFF_WEBREV) $url
+    set fd [wget $url]
+    set list ""
+
+    puts [gets $fd]
+
+    set data [read $fd]
+    regsub -all "<p>\[\n\r \t\]+<code>" $data "<p><code>" data
+    set lines [split $data \n]
+    for {set i 0} {$i < [llength $lines]} {} {
+        set line [string trim [lindex $lines $i]]
+        puts $line
+        incr i
+        if {$line == "<p><code>"} {
+            set old ""
+            set new ""
+            while {$i < [llength $lines]} {
+                set line [string trim [lindex $lines $i]]
+                incr i
+                if {$line == "</code>"} {
+                    break
+                } elseif {[regexp {<a href="([^\"]+)-[.]html">Old</a>} $line dummy old]} {
+                    continue
+                } elseif {[regexp {<a href="([^\"]+)[.]html">New</a>} $line dummy new]} {
+                    continue
+                }
+            }
+            if {"$old" == ""} {
+                if {"$new" == ""} {
+                    continue
+                } else {
+                    lappend list "A $new"
+                }
+            } else {
+                if {"$new" == ""} {
+                    lappend list "R $old"
+                } else {
+                    lappend list "M $new"
+                }
+            }
+        }
+    }
+    close $fd
+    return [lsort -command compare_files $list]
+}
+
+proc wget {url} {
+    global env instdir
+
+    set env(WEBGET_URL) $url
+    return [open "|bash $instdir/wget_helper.sh"]
+}
+
+proc find_files_hgweb_mode {url} {
+    global env instdir
+    set fd [wget $url]
+    set list ""
+    set parent ""
+    set child [file tail $url]
+
+    while {![eof $fd]} {
+        set line [string trim [gets $fd]]
+        if {[regexp "class=\"minusline\">--- (\[^ \t\]+)" $line dummy a]} {
+            set line [string trim [gets $fd]]
+            if {[regexp "class=\"plusline\">\[+\]\[+\]\[+\] (\[^ \t\]+)" $line dummy b]} {
+                regsub "^a/" $a "" a
+                regsub "^b/" $b "" b
+                if {"$a" == "/dev/null"} {
+                    lappend list "A $b"
+                } elseif {"$b" == "/dev/null"} {
+                    lappend list "R $a"
+                } else {
+                    lappend list "M $a"
+                }
+            }
+        } elseif {[string equal $line {<th class="author">parents</th>}]} {
+            set line [string trim [gets $fd]]
+            regexp {>([^<]+)</a>} $line dummy parent
+        #} elseif {[string equal $line {<th class="author">children</th>}]} {
+        #    set line [string trim [gets $fd]]
+        #    regexp {>([^<]+)</a>} $line dummy child
+        }
+    }
+    if {$parent == "" || $child == ""} {
+        puts "Cannot find parent ($parent) and/or child ($child)"
+        exit 1
+    }
+    regsub {/rev/[a-f0-9]+$} $url "" url
+    set env(TKDIFF_HGWEB) $url
+    set env(TKDIFF_HGWEB_PARENT) $parent
+    set env(TKDIFF_HGWEB_CHILD)  $child
+    close $fd
+    return [lsort -command compare_files $list]
+}
+
+proc resolve {version} {
+    if {$version == "tip"} {
+        set data [exec hg tip]
+        if {[regexp {changeset:[^0-9]*([0-9]+)} $data dummy version]} {
+            return $version
+        }
+    }
+    return $version
+}
+
+proc translate_version {version} {
+    regsub -all {:[0-9a-f]+$} $version  "" version
+
+    if {[catch {expr $version + 0}]} {
+        catch {
+            set data [exec hg log -r $version]
+            if {[regexp {changeset:([^:]+):} $data dummy version1]} {
+                set version1 [string trim $version1]
+                puts "Found $version = $version1"
+                puts "$data"
+                set version $version1
+            }
+        }
+    }
+    return $version
+}
+
+proc find_files_scm_mode {} {
+    global argv version version2 repo env
+
+    if {[lindex $argv 0] == "-R" && [llength $argv] == 2} {
+        set argv [list -r - [lindex $argv 1]]
+    }
+
+    if {[lindex $argv 0] == "-r"} {
+        set version  [resolve [lindex $argv 1]]
+        set version2 [resolve [lindex $argv 2]]
+
+        set version  [translate_version $version]
+        set version2 [translate_version $version2]
+
+        if {"$version2" == "+"} {
+            set version2 [expr $version + 1]
+            set relative 1
+        }
+        if {"$version" == "-"} {
+            set version [expr $version2 - 1]
+            set relative 1
+        }
+        if {[info exists relative]} {
+            puts "tksvn -r $version $version2"
+        }
+    }
+    set d [pwd]
+    set hg 0
+    set svn 0
+    set git 0
+    while {$d != "/"} {
+        if {[file exists $d/.hg]} {
+            set hg 1
+            break
+        } elseif {[file exists $d/.svn]} {
+            set svn 1
+            break
+        } elseif {[file exists $d/.git]} {
+            set git 1
+            break
+        } else {
+            set d [file dir $d]
+        }
+    }
+
+    if {$hg == 0 && $svn == 0 && $git == 0} {
+        catch {
+            cd $env(REPO_ROOT)/open
+            set d [pwd]
+            set hg 1
+            puts "HG in [pwd]"
+        }
+    }
+
+    if {$hg} {
+        cd $d
+        if {[info exists env(HGCMD)]} {
+            set cmd $env(HGCMD)
+        } else {
+            set cmd hg
+        }
+        set pwd [pwd]
+        if {[regexp {/([^/]+)/open} $pwd dummy r]} {
+            global therepo
+            set therepo "$r "
+        }
+    } elseif {$svn} {
+        set cmd svn
+    } elseif {$git} {
+        cd $d
+        set cmd git
+    }
+    set files [find_scm_files $cmd]
+
+    return $files
+}
+
+proc loadit {} {
+    global hlist list image_sel image_nosel env black red green win listallfiles
+
+    if {[info exists hlist]} {
+        $hlist delete all
+        foreach w [winfo child $hlist] {
+            #puts "Destroying $w"
+            destroy $w
+        }
+    } else {
+        $list delete 0 end
+    }
+
+    set files [find_files]
+    set n 0
+
+    set font [$hlist cget -font]
+    lappend defs -bg [$hlist cget -bg]
+    lappend defs -font [$hlist cget -font]
+
+    if {![info exists black]} {
+        set black [eval tixDisplayStyle imagetext -fg black   $defs]
+        set red   [eval tixDisplayStyle imagetext -fg #800000 -selectforeground #600000 $defs]
+        set green [eval tixDisplayStyle imagetext -fg #008000 -selectforeground #006000 $defs]
+        set win   [eval tixDisplayStyle window    -padx 0 -pady 0 -bg [$hlist cget -bg]]
+    }
+
+    set n 0
+    set listallfiles ""
+    foreach line $files {
+        if {[regexp {^(M|A|R)} $line dummy which]} {
+            set file [lindex $line 1]
+            if {"$which" == "M"} {
+                set style $black
+            } elseif {"$which" == "R"} {
+                set style $red
+            } else {
+                set style $green
+            }
+            if {[info exists hlist]} {
+                set btnname [incr n]
+
+                set selbtn [checkbutton $hlist.${btnname}-sel -padx 1 -pady 3 -bg [$hlist cget -bg] -bd 0 -highlightthickness 0]
+                $selbtn config -command save_selection -variable sel_$file
+
+                set editbtn [button $hlist.${btnname}-edit -padx 4 -pady 0 -bg [$hlist cget -bg] -text \u27a9 -bd 2 -highlightthickness 0]
+                bind $editbtn <ButtonRelease-1> "edit_release $editbtn $file %x %y"
+                $hlist add "$file"  -itemtype window -window $selbtn -style $win
+
+                set id [label $hlist.${btnname}-id -padx 2 -pady 3 -bg [$hlist cget -bg] -bd 0 -text $btnname -justify left -font $font]
+
+                set text $file
+                regsub "test/hotspot/jtreg/runtime/cds/"  $text TESTCDS/ text
+                regsub "src/java.base/share/classes/"  $text JBCLS/ text
+                regsub "src/hotspot/share/"  $text HS/ text
+                regsub "src/hotspot/cpu/"    $text Hc/ text
+                regsub "src/hotspot/os/"     $text Ho/ text
+                regsub "src/hotspot/os_cpu/" $text H_/ text
+                regsub "test/hotspot/jtreg/" $text HS/JTREG/ text
+                regsub "src/jdk.internal.jvmstat/share/classes/" $text JVMSTAT/ text
+                $hlist item create $file 1 -itemtype window -window $id -style $win
+                $hlist item create $file 2 -itemtype window -window $editbtn -style $win
+                $hlist item create $file 3 -itemtype text -text "$text"
+            } else {
+                $list insert end $file
+            }
+            lappend listallfiles "[format %3d $n] $line"
+        }
+    }
+
+    if {[info exists hlist]} {
+        restore_selection
+    }
+
+    .count config -text $n
+    return $n
+}
+
+proc find_scm_files {cmd} {
+    global hasrepo
+    set repos .
+
+    if 0 {
+        foreach dir [lsort [glob -nocomplain */.hg */*/.hg  */*/*/.hg]] {
+            set repo [file dir $dir]
+            lappend repos $repo
+        }
+    }
+
+    set files {}
+    foreach repo $repos {
+        set list [find_files_in_repo $cmd $repo]
+        foreach f $list {
+            if {"$repo" != "."} {
+                set mode [lindex $f 0]
+                set name [lindex $f 1]
+                set f "$mode $repo/$name"
+
+                set hasrepo($repo) 1
+            }
+            lappend files $f
+        }
+    }
+
+    return $files
+}
+
+proc find_files_in_repo {cmd dir} {
+    set files ""
+
+    set pwd [pwd]
+    if {[catch {
+        cd $dir
+        set files [find_files_in_repo0 $cmd]
+    } err]} {
+        puts $err
+    }
+
+    cd $pwd
+    return $files
+}
+
+#proc compare_files {a b} {
+#    return [string comp [lindex $a 1] [lindex $b 1]]
+#}
+
+proc compare_files {a b} {
+    set fa [lindex $a 1]
+    set fb [lindex $b 1]
+
+    set roota [file root $fa]
+    set rootb [file root $fb]
+    if {"$roota" == "$rootb"} {
+        set exta [file ext $fa]
+        set extb [file ext $fb]
+
+        if {"$exta" == ".hpp" || "$extb" == ".cpp"} {
+            return -1
+        }
+        if {"$extb" == ".hpp" || "$exta" == ".cpp"} {
+            return 1
+        }
+    }
+    return [string compare $fa $fb]
+}
+
+set therepo ""
+proc find_files_in_repo0 {cmd} {
+    global version version2 therepo
+    if {![info exists version]} {
+        wm title . "${therepo}tksvn tip : latest edit"
+        if {[catch {
+            set files ""
+            if {$cmd == "git"} {
+                foreach line [split [exec $cmd status ] \n] {
+                    if {[regexp "modified: +(.*)" $line dummy file]} {
+                        lappend files "M $file"
+                    }
+                }
+            } else {
+                set files [split [eval exec $cmd status ] \n]
+            }
+        } err]} {
+            puts $err
+        }
+    } else {
+        set files ""
+        if {$cmd == "hg"} {
+            if {[string comp "$version2" ""] == 0} {
+                wm title . "${therepo}tksvn $version : latest edit"
+                set fd [open "|hg diff -r $version"]
+            } else {
+                wm title . "${therepo}tksvn $version : $version2"
+                set fd [open "|hg diff -r $version -r $version2"]
+            }
+        } elseif {$cmd == "git"} {
+            set fd [open "|git diff $version $version2"]
+        } else {
+            puts "Not supported: $cmd"
+            exit 1
+        }
+
+        while {![eof $fd]} {
+            set line [gets $fd]
+            #puts $line
+            regsub -all \t $line " " line
+
+            if {[regexp {^--- a/([^ ]+)} $line dummy file]} {
+                set line [gets $fd]
+                regsub -all \t $line " " line
+                if {[regexp {^[+][+][+] b/([^ ]+)} $line dummy file]} {
+                    lappend files "M $file"
+                } elseif {[regexp {^[+][+][+] /dev/null} $line]} {
+                    lappend files "R $file"                    
+                }
+            } elseif {[regexp {^--- /dev/null} $line]} {
+                set line [gets $fd]
+                regsub -all \t $line " " line
+                if {[regexp {^[+][+][+] b/([^ ]+)} $line dummy file]} {
+                    lappend files "A $file"
+                }
+            }
+        }
+        #exit
+    }
+    #puts $files
+    set files [lsort -command compare_files $files]
+    return $files
+}
+
+proc doit_hlist {file} {
+    #puts hello-$file
+    global accepted
+    if {![info exists accepted] || 1} {
+        doit $file
+    }
+}
+
+set lastlaunched ""
+
+proc doit {file} {
+    global env version version2 hasrepo lastlaunched 
+
+    #puts "LAST: $lastlaunched"
+    #puts "file: $file"
+
+    if {$file == $lastlaunched} {
+        return
+    }
+    set pwd [pwd]
+
+    foreach repo [array names hasrepo] {
+        if {[string first $repo/ $file] == 0} {
+            set file [string range $file [string length $repo/] end]
+            cd $repo
+        }
+    }
+
+    if {[catch {
+        if {[info exists version]} {
+            if {[string comp "$version2" ""] == 0} {
+                do-launch -r $version [list $file]
+            } else {
+                do-launch -r $version -r $version2 [list $file]
+            }
+        } else {
+            do-launch [list $file]
+        }
+    } e]} {
+        puts $e
+    }
+
+    set lastlaunched $file
+    cd $pwd
+}
+
+proc do-launch {args} {
+    #puts "do-launch $args"
+    global env accepted instdir
+    set tkdiff tkdiff
+
+    if {[info exists env(TKDIFF_CMD)]} {
+        set tkdiff $env(TKDIFF_CMD)
+    } else {
+        set tkdiff $instdir/tkdiff
+    }
+
+    if {[lindex $args 0] != "<key>" && 0} {
+        puts "$tkdiff $args"
+    }
+    set found 0
+    foreach chan [array names accepted] {
+        catch {
+            puts $chan "[pwd] $args"
+            flush $chan
+            set found 1
+        }
+    }
+
+    if {[lindex $args 0] != "<key>"} {
+        if {$found == 0} {
+            puts "$tkdiff $args"
+            eval exec $tkdiff $args &
+        }
+    }
+}
+
+proc doedit {file} {
+    global instdir
+    exec bash $instdir/qe.sh $file &
+    xraise emacs23 1
+}
+
+proc edit_release {b file x y} {
+    #$b deselect
+    if {$x >= 0  && $x < [winfo width $b] &&
+        $y >= 0  && $y < [winfo height $b]} {
+        doedit $file
+    }
+}
+
+proc editit {} {
+    global hlist list
+
+    if {[info exists hlist]} {
+        set file [$hlist info selection]
+        if {"$file" != ""} {
+            doedit $file
+        }
+    } else {
+
+    }
+}
+
+proc meldit {} {
+    global hlist list instdir
+
+    if {[info exists hlist]} {
+        set file [$hlist info selection]
+        global version version2
+        if {[info exists version]} {
+            if {[string comp "$version2" ""] != 0} {
+                puts "Meld can work only on the latest edit"
+                return
+            } else {
+                set tmp /tmp/[file tail $file].$version
+                catch {
+                    exec hg cat -r $version list $file > $tmp 2>@ stderr
+                    exec meld  $tmp $file 2>@ stderr &
+                }
+            }
+        } else {
+
+        }
+    } else {
+
+    }
+}
+
+proc select_tk {x y} {
+    global list
+
+    doit [$list get [$list nearest $y]]
+}
+
+proc diffit {x y} {
+    global accepted hlist
+
+    set n [expr [$hlist column width 0] + [$hlist column width 1]]
+    if {$x < $n} {
+        return
+    }
+
+    if {[info exists accepted] && [array size accepted] > 0} {
+        navigate 0
+    }
+}
+
+proc get_selection {{is_selected 1}} {
+    global hlist
+
+    set list {}
+    foreach file [lsort [$hlist info children]] {
+        global sel_$file
+        set value [set sel_$file]
+        if {$value == $is_selected} {
+            lappend list $file
+        }
+    }
+
+    return $list
+}
+
+proc list_all {} {
+    global listallfiles
+    catch {
+        foreach n $listallfiles {
+            puts $n
+        }
+    }
+}
+
+proc list_current {} {
+    global hlist
+
+    puts [$hlist info selection]
+}
+
+proc list_select {} {
+    set n 0
+    puts " >>"
+    foreach item [get_selection] {
+        puts "$item \\"
+        incr n
+    }
+    puts " ==================== $n items selected"
+}
+
+proc list_unselect {} {
+    set n 0
+    puts " >>"
+    foreach item [get_selection 0] {
+        puts "$item \\"
+        incr n
+    }
+    puts " ==================== $n items NOT selected"
+}
+
+proc read_save_selections {} {
+    global sel_file
+
+    set list {}
+
+    if {[file exists $sel_file]} {
+        set fd [open $sel_file]
+        while {![eof $fd]} {
+            lappend list [gets $fd]
+        }
+        close $fd
+    }
+
+    return $list
+}
+
+proc save_selection {} {
+    global sel_file
+
+    set old [read_save_selections]
+    foreach f $old {
+        if {[string trim $f] != ""} {
+            set sel($f) 1
+        }
+    }
+
+    foreach item [get_selection] {
+        set sel($item) 1
+    }
+
+    foreach item [get_selection 0] {
+        if {[info exists sel($item)]} {
+            unset sel($item)
+        }
+    }
+
+    set fd [open $sel_file w+]
+    foreach item [lsort [array names sel]] {
+        puts $fd $item
+    }
+    close $fd
+}
+
+proc restore_selection {} {
+    global hlist image_sel
+
+    foreach item [read_save_selections] {
+        if {[$hlist info exists $item]} {
+            set b [$hlist item cget $item 0 -window]
+            $b select
+        }
+    }
+}
+
+proc handle_window_size {} {
+    global afterid
+
+    if {![info exists afterid]} {
+        set afterid [after 2000 save_window_geom]
+    }
+}
+
+proc save_window_geom {{nomore 0}} {
+    global afterid nomore_geom
+
+    if {[info exists nomore_geom]} {
+        return
+    }
+
+    if {$nomore == 1} {
+        set nomore_geom 1
+        bind . <Configure> ""
+    }
+    catch {after cancel $afterid}
+    catch {unset afterid}
+
+    set cfg ~/.tksvn_geom
+
+    if {[catch {
+        set tmp $cfg.tmp.[pid]
+        set fd [open $tmp w+]
+        puts $fd [wm geometry .]
+        close $fd
+        file rename -force $tmp $cfg
+        
+        #set fd [open $cfg]
+        #puts "==saved: [string trim [read $fd]]===[clock seconds]"
+        #close $fd
+    } err]} {
+        puts $err
+    }
+    catch {
+        file delete $tmp
+    }
+}
+
+proc main {} {
+    start_server
+
+    if {[catch {package require Tix}]} {
+        mkui_tk        
+    } else {
+        mkui_tix
+    }
+
+    bind . <Configure> handle_window_size
+    bind . <Destroy> {if {"%W" == "."} {save_window_geom}} 
+
+    if {[catch {
+        set fd [open ~/.tksvn_geom]
+        set geom [string trim [read $fd]]
+        close $fd
+        #puts "====== $geom"
+        wm geometry . $geom
+    }]} {
+        set h [winfo vrootheight .]
+        if {$h < 800} {
+            wm geometry . 400x600+50+50
+        } else {
+            wm geometry . 400x600+0+423
+        }
+    }
+
+
+    update idletasks
+    set_icon . icons8-git-48.png
+}
+
+proc accept {chan addr port} {
+    global accepted
+    set accepted($chan) 1
+    fileevent $chan readable "myfileevent $chan"
+}
+
+proc myfileevent {chan} {
+    global accepted lastlaunched
+
+    set line [gets $chan]
+    if {"$line" == "prev"} {
+        do_prev
+    }
+    if {"$line" == "next"} {
+        do_next
+    }
+    if {[eof $chan] || "$line" == "quit"} {
+        #puts quit!!
+        catch {close $chan}
+        catch {unset accepted($chan)}
+        set lastlaunched ""
+        #parray accepted
+        #puts [array size accepted]
+    }
+}
+
+# start the server port to communicate with child tkdiff processes
+proc start_server {} {
+    global env
+    set fd [socket -server accept 0]
+    set env(TKSVN_PORT) [lindex [fconfigure $fd -sockname] end]
+}
+
+main
