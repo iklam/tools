@@ -1,13 +1,10 @@
-set url https://github.com/openjdk/lilliput/pull/13/files
-
-
 proc get_pr_info {url} {
     set data [exec wget -q -O - $url]
 
     set root $url
     regsub {/pull/[0-9]*/files} $root "" root
 
-    regsub {.*<div class="js-diffbar-range-list"} $data "" data
+    regsub {.*data-range-url="[^>]*/[$]range"} $data "" data
     regsub {</details-menu>.*} $data "" data
 
     set commits {}
@@ -44,6 +41,15 @@ proc get_pr_info {url} {
 
     puts $diffurl
 }
+
+set url [lindex $argv 0]
+if {$url == ""} {
+    set url https://github.com/openjdk/lilliput/pull/13/files
+    puts "Using this for testing ... $url"
+}
+
+regsub {(pull/[0-9]*).*} $url \\1 url
+append url /files
 
 get_pr_info $url
 

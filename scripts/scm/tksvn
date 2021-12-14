@@ -259,6 +259,8 @@ proc find_files {} {
 
     if {[regexp {(http://hg.openjdk.java.net/)|(http://closedjdk.[^/]*/)} $s]} {
         return [find_files_hgweb_mode $s]
+    } elseif {[regexp "^https://github.com/.*/pull/" $s]} {
+        return [find_files_github_pr $s]
     } elseif {[regexp "^((http(s|)://))" $s]} {
         return [find_files_webrev_mode $s]
     } else {
@@ -649,32 +651,63 @@ proc find_files_in_repo0 {cmd} {
             puts "Not supported: $cmd"
             exit 1
         }
-
-        while {![eof $fd]} {
-            set line [gets $fd]
-            #puts $line
-            regsub -all \t $line " " line
-
-            if {[regexp {^--- a/([^ ]+)} $line dummy file]} {
-                set line [gets $fd]
-                regsub -all \t $line " " line
-                if {[regexp {^[+][+][+] b/([^ ]+)} $line dummy file]} {
-                    lappend files "M $file"
-                } elseif {[regexp {^[+][+][+] /dev/null} $line]} {
-                    lappend files "R $file"                    
-                }
-            } elseif {[regexp {^--- /dev/null} $line]} {
-                set line [gets $fd]
-                regsub -all \t $line " " line
-                if {[regexp {^[+][+][+] b/([^ ]+)} $line dummy file]} {
-                    lappend files "A $file"
-                }
-            }
-        }
-        #exit
+        set files [parse_diff_to_files $fd]
     }
     #puts $files
     set files [lsort -command compare_files $files]
+    return $files
+}
+
+proc find_files_github_pr {url} {
+    global instdir env
+
+# https://raw.githubusercontent.com
+
+    set fd [open "|tclsh $instdir/gitpr.tcl $url"]
+    set diffurl [string trim [read $fd]]
+    close $fd
+
+    if {[regexp {github.com/(.*)/compare/([^/]+)[.][.]([^/]+)[.]diff} $diffurl dummy proj oldver newver]} {
+        puts "diff $proj $oldver vs $newver"
+        set env(GITPR_PROJ)   $proj
+        set env(GITPR_OLDVER) $oldver
+        set env(GITPR_NEWVER) $newver
+    } else {
+        puts "Cannot get git info from: $giturl"
+        exit 1
+    }
+
+    set fd [wget $diffurl]
+    set files [parse_diff_to_files $fd]
+    #puts [llength $files]
+    set files [lsort -command compare_files $files]
+    return $files
+}
+
+proc parse_diff_to_files {fd} {
+    set files ""
+    while {![eof $fd]} {
+        set line [gets $fd]
+        #puts $line
+        regsub -all \t $line " " line
+
+        if {[regexp {^--- a/([^ ]+)} $line dummy file]} {
+            set line [gets $fd]
+            regsub -all \t $line " " line
+            if {[regexp {^[+][+][+] b/([^ ]+)} $line dummy file]} {
+                lappend files "M $file"
+            } elseif {[regexp {^[+][+][+] /dev/null} $line]} {
+                lappend files "R $file"                    
+            }
+        } elseif {[regexp {^--- /dev/null} $line]} {
+            set line [gets $fd]
+            regsub -all \t $line " " line
+            if {[regexp {^[+][+][+] b/([^ ]+)} $line dummy file]} {
+                lappend files "A $file"
+            }
+        }
+    }
+    close $fd
     return $files
 }
 
@@ -726,7 +759,7 @@ proc doit {file} {
 
 proc do-launch {args} {
     #puts "do-launch $args"
-    global env accepted instdir
+    global env accepted instdir gitpr
     set tkdiff tkdiff
 
     if {[info exists env(TKDIFF_CMD)]} {

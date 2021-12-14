@@ -33,6 +33,21 @@ package require Tk 8.0
 
 source $env(IOISVN)/scripts/xraise.tcl
 
+# see if we are running from "tksvn https://github.com/.....", etc
+proc check_special_modes {} {
+    global argv argc env
+    if {[info exists env(GITPR_PROJ)]} {
+        set file [lindex $argv 0]
+        set root https://raw.githubusercontent.com/$env(GITPR_PROJ)
+        set old $root/$env(GITPR_OLDVER)/$file
+        set new $root/$env(GITPR_NEWVER)/$file
+        set argv [list $old $new]
+        set argc 2
+    }
+}
+
+check_special_modes
+
 # Change to t for trace info on stderr
 set g(debug) f
 
@@ -809,7 +824,6 @@ proc get_hgweb {f rev out} {
 proc get_http {f rev out} {
     global env files_to_delete
 
-    puts $f-$rev-$out
     set env(dont_change_title_anymore) 1
     wm title . "tkdiff [file tail $f]"
     set fd1 [open "|wget -q -O - $f"]
@@ -10015,6 +10029,7 @@ proc receive_tksvn {fd} {
     set argc [llength $argv]
 
     #do-new-diff
+    check_special_modes
     commandline
     assemble-args
 
