@@ -14,9 +14,9 @@ foreach pat $locations {
                     set b [string trim $b]
                     if {$b != ""} {
                         set iscurrent [regsub {^[*] } $b "" b]
-                        if {"$b" == "master" || "$b" == "lworld"} {
-                            continue
-                        }
+                        #if {"$b" == "master" || "$b" == "lworld"} {
+                        #    continue
+                        #}
                         set log [exec git log -1 $b]
                         set date 0
                         catch {
