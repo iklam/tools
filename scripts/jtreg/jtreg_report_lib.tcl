@@ -238,7 +238,7 @@ proc findlogfiles {} {
             # some files may be moved by jtreg while we are trying to read its size.
             set size [file size $file]
         }
-        tsv::set logfiles $key [list $file $size]
+        #tsv::set logfiles $key [list $file $size]
     }
 
     if {[info exists env(TIMING)]} {
@@ -249,8 +249,8 @@ proc findlogfiles {} {
 proc update_reports {start_ms} {
     global has_found env
     set start [clock milliseconds]
-    findlogfiles
     build_worklists
+   #findlogfiles
     do_work
 
     update_report index.html         0         ""

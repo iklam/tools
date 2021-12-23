@@ -7,6 +7,13 @@
 
 package require Tcl 8.4
 
+proc make_link {html log} {
+    foreach dummy [file split [file dirname $html]] {
+        set log "../$log"
+    }
+    return $log
+}
+
 proc convert_html {jtr} {
     global logfiles env
     cd ~/tmp/$env(JTREG_DIR)
@@ -28,6 +35,8 @@ proc convert_html {jtr} {
         }
     }
 
+    set jtr_data_dir [file root $jtr]
+
     set fd [open $jtr r+]
     set link $jtr
     regsub -all "#" $link %23 link
@@ -35,6 +44,8 @@ proc convert_html {jtr} {
     set pat {(logging std... to) (.*[.]std...)}
     set num_logs 0
     set jtrdata ""
+
+    set process_pat {^\[202.-[0-9].*for process [0-9]+$}
     while {![eof $fd]} {
         set line [gets $fd]
         append jtrdata $line\n
@@ -53,28 +64,38 @@ proc convert_html {jtr} {
             }
         }
 
-        if {[string first "logging std" $line] >= 0 && [regexp $pat $line dummy dummy filename]} {
-            set ttt $testname
-            regsub .*/ $ttt "" ttt
-            set fff $filename
-            regsub .*/ $fff "" fff
-            foreach index [list $ttt,$fff scratch,$fff] {
-                #puts ====$index
-                if {0 && [tsv::exists logfiles $index]} {
-                    #puts huh
-                    incr num_logs
-                    set anchor "<a name=log$num_logs></a>"
-                    set item [tsv::get logfiles $index]
-                    set file [lindex $item 0]
-                    set size [lindex $item 1]
-                    set link [make_link $html $file]
-                    regsub -all "#" $link %23 link
-                    set file "$anchor<a href=$link>$filename</a> [format {%7d bytes} $size]"
-                    regsub $pat $line "\\1 $file" line
-                    break
-                }
+        if {[string first "\[20" $line] == 0 && [regexp $process_pat $line]} {
+            # this is pretty useless
+            continue;
+        } elseif {[string first "Command line: \[" $line] == 0} {
+            incr num_logs
+            set line "<a name=log$num_logs>\[$num_logs\]</a> $line"
+        } elseif {[string first "logging std" $line] >= 0 && [regexp $pat $line dummy dummy filename]} {
+            set filename [file tail $filename]
+            set mts 0
+            set mtd 0
+            set s work/scratch/$filename
+            set d $jtr_data_dir/$filename
+            if {[file exists $s]} {
+                set mts [file mtime $s]
             }
-        } else {
+            if {[file exists $d]} {
+                set mtd [file mtime $d]
+            }
+            if {$mts > 0 || $mtd > 0} {
+                if {$mts >= $mtd} {
+                    set file $s
+                } else {
+                    set file $d
+                }
+                regsub {^[.]/} $file "" file
+
+                set size [file size $file]
+                set link /~iklam/jtreg/$env(JTREG_DIR)/$file
+                set file "<a href=$link>$filename</a> [format {%7d bytes} $size]"
+                regsub $pat $line "\\1 $file" line
+            }
+        } elseif {[string first .log $line] > 0} {
             set xpat "^# (/jdk.*/tmp/$env(JTREG_DIR)/work/scratch/.*.log)"
             if {[regexp $xpat $line dummy path]} {
                 regsub "^/jdk.*/tmp/$env(JTREG_DIR)/" $path "" file
@@ -117,6 +138,7 @@ proc convert_html {jtr} {
             background-color: #333;
             position: fixed; /* Set the navbar to fixed position */
             top: 0; /* Position the navbar at the top of the page */
+            left: 120;
             width: 100%; /* Full width */
         }
 
@@ -138,19 +160,19 @@ proc convert_html {jtr} {
 
         /* Main content */
         .main {
-            margin-top: 60px; /* Add a top margin to avoid content overlay */
+            margin-top: 50px; /* Add a top margin to avoid content overlay */
         }
-
         </style>
         </head>
         <body>
         <div class="navbar">
     }
 
-    append header "<a href=[file tail $link]>orig</a>"
+    append header "<a href=[file tail $jtr]>orig</a>"
+    for {set i 1} {$i <= $num_logs} {incr i} {
+        append header "<a href='#log${i}'>$i</a>"
+    }
     append header {
-        <a href="#log1">First</a>
-        <a href="#log2">Second</a>
         </div>
         <div class="main">
     }
