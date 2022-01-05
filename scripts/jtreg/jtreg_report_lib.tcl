@@ -19,6 +19,7 @@ proc build_worklists {} {
     set pwd [pwd]
     cd ~/tmp/$env(JTREG_DIR)
     set me_started [clock milliseconds]
+    set num_work_items 0
 
     set fd [open "|find . -name classes -prune -o -name *.jtr -print | sort"]
     while {![eof $fd]} {
@@ -38,13 +39,14 @@ proc build_worklists {} {
         set g_reports($f) $mtfile
         if {$mthtml < $mtfile || $mtstat < $mtfile} {
             set g_updates($f) 1
+            incr num_work_items
         } else {
             uplevel #0 source $f.stat
         }
     }
 
     if {[info exists env(TIMING)]} {
-        puts "build_worklists = [expr [clock milliseconds] - $me_started] ms"
+        puts "build_worklists = [expr [clock milliseconds] - $me_started] ms ($num_work_items items)"
     }
 }
 
