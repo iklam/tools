@@ -48,9 +48,58 @@ proc compare_by_timestamp {a b} {
     return [expr $seen($a) - $seen($b)]
 }
 
+proc get_title {b} {
+    global table
+    set cache ~/.gitbranches
 
-set dirfmt "%-${maxlen}s %s%s"
+    if {![array exists table]} {
+        catch {
+            set fd [open $cache r]
+            while {![eof $fd]} {
+                set br [gets $fd]
+                set name [gets $fd]
+                set table($br) $name
+            }
+            close $fd
+        }
+    }
 
+    if {![info exists table($b)]} {
+        set title "??"
+        catch {
+            set url https://github.com/openjdk/jdk/$b
+            set fd [open "|wget -O - -q $url" r]
+            while {![eof $fd]} {
+                set line [gets $fd]
+                if {[regexp {<title>([^<]+)</title>} $line dummy title]} {
+                    regsub { ·.*} $title "" title
+                    break;
+                }
+            }
+            catch {close $fd}
+        }
+        set table($b) $title
+        
+        set fd [open $cache w+]
+        foreach br [array names table] {
+            puts $fd $br
+            puts $fd $table($br)
+        }
+        close $fd
+    }
+
+    return $table($b)
+}
+
+if {[lindex $argv 0] == "-v"} {
+    set verbose 1
+} else {
+    set verbose 0
+}
+
+set dirfmt "%-${maxlen}s %s%s%s"
+set N {[0-9]}
+set bugid_exp "($N$N$N$N$N$N$N)"
 foreach item [lsort -command compare_by_timestamp [array names seen]] {
     set list [split $item :]
     set dir [lindex $list 0]
@@ -61,5 +110,14 @@ foreach item [lsort -command compare_by_timestamp [array names seen]] {
         set c "  "
     }
 
-    puts "[clock format $seen($item)] [format $dirfmt $dir $c $b]"
+    set pr_title ""
+    if {[regexp {^pull/[0-9]+$} $b]} {
+        set pr_title " [get_title $b]"
+    } else {
+        if {[regexp $bugid_exp $b dummy bugid] && $verbose} {
+            set pr_title " https://bugs.openjdk.java.net/browse/JDK-$bugid"
+        }
+    }
+
+    puts "[clock format $seen($item)] [format $dirfmt $dir $c $b $pr_title]"
 }
