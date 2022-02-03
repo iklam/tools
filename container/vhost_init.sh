@@ -9,11 +9,7 @@
 #
 # bash vhost_init.sh <vhost> <http_proxy> <https_proxy> <verbose>
 #
-# <vhost> is required and must be one of the following. See ./multipass_vhost_setup.sh
-#            for more info:
-#            - docker-tester
-#            - podman-tester
-#            - master
+# See ./multipass_vhost_setup.sh for valid names for <vhost>
 #
 # <http_proxy> and <https_proxy> are optional. If specified, we configure various tools
 #            to use these proxies (apt, docker, podman, etc)

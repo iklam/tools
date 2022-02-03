@@ -10,9 +10,6 @@
 
 # This is a script for setting up a multipass VM, for the purpose of testing Java and containers
 #
-# TODO: make it possible to specify different:
-#       - OS image version (currently hard-coded to Ubuntu 21.10)
-#
 # Benefits:
 #    - remove all the manual steps of setting up a Linux VM for various types of container technologies
 #    - support for http/s proxies, important when testing inside a firewall
@@ -21,24 +18,19 @@
 # Usage:
 #    bash multipass_vhost_setup.sh <vhost>
 #
-#    Currently supported <vhost> are:
-#       master          - (cgV2) Ubuntu 21.10, Kubernetes master, using docker for containers
-#       docker-tester   - (cgV2) Ubuntu 21.10     + docker
-#       podman-tester   - (cgV2) Ubuntu 21.10     + podman
-#       minikubev1      - (cgV1) Ubuntu 20.04 LTS + docker + cgroupv1 + minikube + kubectl
-#       minikubev2      - (cgV2) Ubuntu 21.10     + docker + cgroupv2 + minikube + kubectl
-#       worker          - (cgV2) Ubuntu 21.10     + ????
+# vhost can be one of the following:
+#
+# vhost            cgroup Ubuntu           Components installed
+# ---------------- ------ ---------------- ---------------------------------------------------
+# docker-cgv1      v1     Ubuntu 20.04 LTS docker
+# docker-cgv2      v2     Ubuntu 21.10     docker
+# podman-cgv1      v1     Ubuntu 20.04 LTS podman
+# podman-cgv2      v2     Ubuntu 21.10     podman
+# minikube-cgv1    v1     Ubuntu 20.04 LTS docker + minikube + kubectl
+# minikube-cgv2    v2     Ubuntu 21.10     docker + minikube + kubectl
 
 mydir=$(dirname "$0")
 vhost=$1
-
-if test -t 0 && test -t 1 && test -t 2; then
-    true
-else
-    echo "This script doesn't work if stdin/out/err is piped"
-    echo "Because some apt-get install steps requires real terminal"
-    #exit 1
-fi
 
 if test "$vhost" = ""; then
     echo Usage: bash $0 host
