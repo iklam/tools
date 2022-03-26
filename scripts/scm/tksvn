@@ -790,7 +790,7 @@ proc do-launch {args} {
 
 proc doedit {file} {
     global instdir
-    exec bash $instdir/qe.sh $file &
+    exec emacsclient -n $file &
     xraise emacs23 1
 }
 

@@ -69,7 +69,7 @@ proc do_work {} {
         set g_data($jtr,reason)    [lindex $results 0]
         set g_data($jtr,elapsed)   [lindex $results 1]
         set g_data($jtr,num_child) [lindex $results 2]
-        #puts ---->$status
+        #puts $status
     }
 
     if {[info exists env(TIMING)]} {
@@ -156,19 +156,23 @@ proc update_report {outfile start_ms execStatus} {
     set me_started [clock milliseconds]
     set fd [open report/html/$outfile w+]
 
-    write_report_header $fd outfile
+    write_report_header $fd $outfile
 
+    #puts $outfile
     foreach jtr [lsort -dictionary [array names g_reports]] {
         set html $jtr.html
         regexp {[.]/work/(.*)[.]jtr} $jtr dummy test
         set reason    $g_data($jtr,reason)
         set elapsed   $g_data($jtr,elapsed)
         set num_child $g_data($jtr,num_child)
+        set hasfailed 0
 
         if {[regexp execStatus=Failed $reason]} {
             set status "<td bgcolor=#ffa0a0>FAILED</td>"
+            set hasfailed 1
         } elseif {[regexp execStatus=Error $reason]} {
             set status "<td bgcolor=#ffffa0>Error</td>"
+            set hasfailed 1
         } else {
             set status "<td>&nbsp;</td>"
         }
@@ -179,13 +183,19 @@ proc update_report {outfile start_ms execStatus} {
             set color ""
         }
 
+        if {$outfile == "failed.html" || $outfile == "failed_latest.html"} {
+            if {!$hasfailed} {
+                continue
+            }
+        }
+
         incr n
         puts $fd "<tr><td $color align=right>$n</td>"
         puts $fd "$status"
-        puts $fd "<td $color valign=top><a href=../../${html}#log1>$test</a></td>"
+        puts $fd "<td width='50%' $color valign=top><a href=../../${html}#log1>$test</a></td>"
         puts $fd "<td $color valign=top align=right>$elapsed</td>"
         puts $fd "<td $color valign=top align=right>$num_child</td>"
-        puts $fd "<td $color valign=top>$reason</td></tr>"
+        puts $fd "<td width='30%' $color valign=top>$reason</td></tr>"
 
         if {[info exists ffd]} {
             # hack!!

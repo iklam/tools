@@ -49,6 +49,11 @@ proc convert_html {jtr} {
     while {![eof $fd]} {
         set line [gets $fd]
         append jtrdata $line\n
+
+        if {[regexp {test result: Failed. (.*)} $line dummy err]} {
+            set reason "execStatus=Failed $err<br>$reason"
+        }
+
         if {[regexp "\[\#\\\\&<>\]" $line]} {
             if {[regexp "\#  (assert\[\(\].*)" $line dummy assert]} {
                 append reason "<br>&nbsp;&nbsp;<font color=#f04040>$assert</font>"
@@ -60,7 +65,7 @@ proc convert_html {jtr} {
             regsub -all "<" $line "\\&lt;" line
             regsub -all ">" $line "\\&gt;" line
             if {[string index $line 0] == "#"} {
-                set line "<b><font color=#602020>$line</font></b>"
+                set line "<b><font color=#802020>$line</font></b>"
             }
         }
 
@@ -92,6 +97,7 @@ proc convert_html {jtr} {
 
                 set size [file size $file]
                 set link /~iklam/jtreg/$env(JTREG_DIR)/$file
+                regsub -all \# $link %23 link
                 set file "<a href=$link>$filename</a> [format {%7d bytes} $size]"
                 regsub $pat $line "\\1 $file" line
             }
@@ -188,7 +194,7 @@ proc convert_html {jtr} {
     set num_child [regsub -all {\[ELAPSED: } $data "" foo]
 
     set fd [open $stat w+]
-    puts $fd "set g_data($jtr,reason) $elapsed"
+    puts $fd "set g_data($jtr,reason) \"$reason\""
     puts $fd "set g_data($jtr,elapsed) $elapsed"
     puts $fd "set g_data($jtr,num_child) $num_child"
     close $fd

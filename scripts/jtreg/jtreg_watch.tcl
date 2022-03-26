@@ -1,4 +1,5 @@
-source [file dirname [info script]]/jtreg_report_lib.tcl
+set mydir [file dirname [info script]]
+source $mydir/../lib/process_lib.tcl
 
 if {[llength $argv] > 0} {
     set jdk [lindex $argv 0]
@@ -12,6 +13,7 @@ if {[info exists env(JTR_START)]} {
 } else {
     set start [clock seconds]
 }
+set last_update_ms [clock milliseconds]
 set numpassed 0
 set numfailed 0
 set numerror  0
@@ -64,12 +66,55 @@ proc print_compilation_error {file} {
     }
 }
 
+proc update_report {is_final_report} {
+    global updating_report mydir non_final_report_done
+
+    if {[info exists updating_report]} {
+        set non_final_report_done 0
+        if {$is_final_report} {
+            while {[info exists updating_report]} {
+                puts "waiting for non-final report to finish"
+                vwait non_final_report_done
+            }
+            puts "non-final report has finished"
+        } else {
+            return
+        }
+    }
+
+    #puts "Updating report"
+    set updating_report 1
+    set cmd "tclsh $mydir/jtreg_report.tcl"
+
+    if {$is_final_report} {
+        process_dispatch report $cmd
+        process_join
+        exit
+    } else {
+        process_dispatch report $cmd update_report_callback
+    }
+}
+
+proc update_report_callback {handle output} {
+    #puts $handle-$output-
+    global updating_report last_report_time non_final_report_done
+
+    if {$output != {}} {
+        foreach line $output {
+            puts $line
+        }
+    }
+    set last_report_time [clock seconds]
+    unset updating_report
+    set non_final_report_done 1
+}
+
 proc doit {args} {
     global start numpassed numfailed numerror numfinish has_started start_test_time end_test_time running
     global failures last_test test_elapsed last_report_time has_parsed_java_files
-    global updating_report
+    global updating_report final_report
 
-    if {[info exists updating_report]} {
+    if {[info exists final_report]} {
         return
     }
 
@@ -84,13 +129,8 @@ proc doit {args} {
                 }
             }
         }
-        if {![info exists updating_report]} {
-            set updating_report 1
-            update_reports $start
-            exit
-        } else {
-            return
-        }
+        set final_report 1
+        update_report 1
     }
     set line [gets stdin]
     set time [clock seconds]
@@ -99,14 +139,8 @@ proc doit {args} {
     }
     set skip 0
 
-    if {$time - $last_report_time > 10} {
-        # FIXME -- update reports in a different thread.
-        if {![info exists updating_report]} {
-            set updating_report 1
-            update_reports $start
-            set last_report_time $time
-            unset updating_report
-        }
+    if {$time - $last_report_time > 10 && ![info exists updating_report]} {
+        update_report 0
     }
 
     if {[regexp {runner starting test: (.*)} $line dummy test]} {
@@ -180,10 +214,11 @@ proc get_seconds {time} {
 set deadvms 0
 set deadvmsec 0
 proc updateit {} {
-    global livevm deadvms deadvmsec savevm
+    global livevm deadvms deadvmsec savevm last_update_ms
     after 1000 updateit
 
     set time [clock seconds]
+    set time_ms [clock milliseconds]
     global running jdk
 
     .t delete 1.0 end
@@ -269,6 +304,8 @@ proc updateit {} {
             .t insert end "\n-- [format %9d $used] used"
             .t insert end "\n-- [format %9d $free] free"
             .t insert end "\n-- [format %9d $buff] buff"
+            .t insert end "\n-- [format %9d [expr $time_ms - $last_update_ms]] update"
+            set last_update_ms $time_ms
         }
     }
     update idletasks
