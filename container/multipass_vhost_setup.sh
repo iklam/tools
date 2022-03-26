@@ -80,16 +80,29 @@ function create_if_needed () {
         ddebug "vhost \"$vhost\" already exists"
         return
     fi
+
+
     # So we can easily build Java inside the VM, run testsm etc:
     #     - Use the same number of CPUs as the physical machine
     #     - Use 16GB RAM / 32GB disk
+    vcpus=$(cat /proc/cpuinfo | grep processor | wc -l)
+
+    if [[ $vhost =~ minikube ]]; then
+        # With minikube, to test CPU limits, it's better to use a smaller setup
+        # - minikube's built-in docker driver always uses the same cpus/memory as
+        #   the vhost. For some reason it cannot be adjusted
+        # - It might be possible to run with "minikube start --driver=virtualbox"
+        #   and limit the cpus/memory, but VB fails to boot up the minikube node
+        #   for me
+        vcpus=4
+    fi
     # To change it, you can
     # multipass stop <hostname>
     # snap stop multipass.multipassd 
     # edit /var/snap/multipass/common/data/multipassd/multipassd-vm-instances.json
     # snap start multipass.multipassd 
     # multipass start <hostname>
-    (set -x; multipass launch --name $vhost -c $(cat /proc/cpuinfo | grep processor | wc -l) -m 16G -d 32G $ubuntu_version)
+    (set -x; multipass launch --name $vhost -c $vcpus -m 16G -d 32G $ubuntu_version)
 }
 
 function vhost_exist () {

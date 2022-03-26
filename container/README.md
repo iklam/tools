@@ -311,7 +311,7 @@ commands that you can issue to examine this environment:
 ### minikube + cgroupv1
 
     # The CpuShares/CpuQuota results are identical to cgroupv1. The only difference
-    # is instead of cpu.weight, cgroupv1 uses /sys/fs/cgroup/cpu,cpuacct
+    # is instead of cpu.weight, cgroupv1 uses /sys/fs/cgroup/cpu,cpuacct/cpu.shares
 
     $ multipass shell minikube-cgv1
     ubuntu@minikube-cgv1:~$ docker exec -it minikube bash
