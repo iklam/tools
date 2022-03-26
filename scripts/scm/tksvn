@@ -471,8 +471,8 @@ proc find_files_scm_mode {} {
 }
 
 proc loadit {} {
-    global hlist list image_sel image_nosel env black red green win listallfiles
-    global file_deleted file_added
+    global hlist list image_sel image_nosel env black red green blue win listallfiles
+    global file_deleted file_added oldname
 
     if {[info exists hlist]} {
         $hlist delete all
@@ -494,8 +494,9 @@ proc loadit {} {
     if {![info exists black]} {
         set black [eval tixDisplayStyle text -fg black   $defs]
         set red   [eval tixDisplayStyle text -fg #800000 -selectforeground #600000 $defs]
-        set green [eval tixDisplayStyle text -fg #008000 -selectforeground #006000 $defs]
-        set win   [eval tixDisplayStyle window    -padx 0 -pady 0 -bg [$hlist cget -bg]]
+        set green [eval tixDisplayStyle text -fg #006000 -selectforeground #006000 $defs]
+        set blue  [eval tixDisplayStyle text -fg #0000b0 -selectforeground #000080 $defs]
+        set win   [eval tixDisplayStyle window -padx 0 -pady 0 -bg [$hlist cget -bg]]
     }
 
     set n 0
@@ -516,6 +517,9 @@ proc loadit {} {
             }
             if {[info exists file_added($file)]} {
                 set style $green
+            }
+            if {[info exists oldname($file)]} {
+                set style $blue
             }
 
             if {[info exists hlist]} {
@@ -712,6 +716,8 @@ proc find_files_github_pr {url} {
 }
 
 proc parse_diff_to_files {fd} {
+    global oldname
+
     set files ""
     while {![eof $fd]} {
         set line [gets $fd]
@@ -731,6 +737,11 @@ proc parse_diff_to_files {fd} {
             regsub -all \t $line " " line
             if {[regexp {^[+][+][+] b/([^ ]+)} $line dummy file]} {
                 lappend files "A $file"
+            }
+        } elseif {[regexp {^rename from (.*)} $line dummy from]} {
+            set line [gets $fd]
+            if {[regexp {^rename to (.*)} $line dummy to]} {
+                set oldname($to) $from
             }
         }
     }
@@ -774,12 +785,7 @@ proc doit {file} {
                 do-launch -r $version -r $version2 [list $file]
             }
         } else {
-            global oldname
-            if {[info exists oldname($file)]} {
-                do-launch [list $file] -O [list $oldname($file)]
-            } else {
-                do-launch [list $file]
-            }
+            do-launch [list $file]
         }
     } e]} {
         puts $e
@@ -791,8 +797,14 @@ proc doit {file} {
 
 proc do-launch {args} {
     #puts "do-launch $args"
-    global env accepted instdir gitpr
+    global env accepted instdir gitpr oldname
     set tkdiff tkdiff
+
+    set file [lindex $args end]
+    if {[info exists oldname($file)]} {
+        lappend args -O
+        lappend args $oldname($file)
+    }
 
     if {[info exists env(TKDIFF_CMD)]} {
         set tkdiff $env(TKDIFF_CMD)
