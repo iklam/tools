@@ -848,6 +848,7 @@ proc get-file-rev {f index {r ""}} {
     global opts
     global tcl_platform
     global env
+    global g
 
     if {"$r" == ""} {
         set rev "HEAD"
@@ -1067,6 +1068,11 @@ proc get-file-rev {f index {r ""}} {
         regsub ^r $rev "" rev
         #puts "rev = $rev"
         set ff [git_full_path $f]
+        if {$index == 1 && $g(oldname) != ""} {
+            set ff $g(oldname)
+            set finfo(lbl,$index) "R/$ff (GIT $rev)"
+        }
+        #puts $index-$rev-$g(oldname)
         die-unless "exec git show ${rev}:$ff" "$finfo(pth,$index)" 1
     } else {
         fatal-error "File '$f' is not part of a revision control system"
@@ -1166,8 +1172,8 @@ proc get-file {f index} {
 
     #set finfo(f,$index) $f
     if {[file exists $f] != 1} {
-        fatal-error "File '$f' does not exist"
-        return 1
+        #fatal-error "File '$f' does not exist"
+        #return 1
     }
     if {[file isdirectory $f]} {
         fatal-error "'$f' is a directory"
@@ -1200,7 +1206,10 @@ proc commandline {} {
     global g
     global env
 
+    #puts $argv
+
     set g(initOK) 0
+    set g(oldname) ""
     set argindex 0
     set revs 0
     set pths 0
@@ -1260,6 +1269,10 @@ proc commandline {} {
             }
         "^-o.*" {
                 set g(mergefile) [string range $arg 2 end]
+            }
+        "^-O$" {
+                incr argindex
+                set g(oldname) [lindex $argv $argindex]
             }
         "^-u$"  {
                 # Ignore flag from "svn diff --diff-cmd=tkdiff"
@@ -5577,23 +5590,34 @@ proc rediff {} {
         }
         show-info "reading $finfo(pth,$mod)..."
         if {[catch {set hndl [open "$finfo(pth,$mod)" r]}]} {
-            global errorInfo
-            puts $errorInfo
-            puts $mod
-            fatal-error "Failed to open file: $finfo(pth,$mod)"
+            #global errorInfo
+            #puts $errorInfo
+            #puts $mod
+            #fatal-error "Failed to open file: $finfo(pth,$mod)"
             
         }
-        $text insert 1.0 [read $hndl]
-        close $hndl
+        if {[info exist hndl]} {
+            $text insert 1.0 [read $hndl]
+            close $hndl
+            unset hndl
+        }
     }
 
-    # Diff the two files and store the summary lines into 'g(diff)'.
+    set diffcmd $opts(diffcmd)
     if {$opts(ignoreblanks) == 1} {
-        set diffcmd "$opts(diffcmd) $opts(ignoreblanksopt)  {$finfo(pth,1)} \
-          {$finfo(pth,2)}"
-    } else {
-        set diffcmd "$opts(diffcmd) {$finfo(pth,1)} {$finfo(pth,2)}"
+        append diffcmd " $opts(ignoreblanksopt)"
     }
+    if {[file exists $finfo(pth,1)]} {
+        append diffcmd " {$finfo(pth,1)}"
+    } else {
+        append diffcmd " /dev/null"
+    }
+    if {[file exists $finfo(pth,2)]} {
+        append diffcmd " {$finfo(pth,2)}"
+    } else {
+        append diffcmd " /dev/null"
+    }
+
     check_copyright $finfo(pth,2)
 
     show-info "Executing \"$diffcmd\""

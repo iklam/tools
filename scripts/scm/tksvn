@@ -472,6 +472,7 @@ proc find_files_scm_mode {} {
 
 proc loadit {} {
     global hlist list image_sel image_nosel env black red green win listallfiles
+    global file_deleted file_added
 
     if {[info exists hlist]} {
         $hlist delete all
@@ -491,9 +492,9 @@ proc loadit {} {
     lappend defs -font [$hlist cget -font]
 
     if {![info exists black]} {
-        set black [eval tixDisplayStyle imagetext -fg black   $defs]
-        set red   [eval tixDisplayStyle imagetext -fg #800000 -selectforeground #600000 $defs]
-        set green [eval tixDisplayStyle imagetext -fg #008000 -selectforeground #006000 $defs]
+        set black [eval tixDisplayStyle text -fg black   $defs]
+        set red   [eval tixDisplayStyle text -fg #800000 -selectforeground #600000 $defs]
+        set green [eval tixDisplayStyle text -fg #008000 -selectforeground #006000 $defs]
         set win   [eval tixDisplayStyle window    -padx 0 -pady 0 -bg [$hlist cget -bg]]
     }
 
@@ -509,6 +510,14 @@ proc loadit {} {
             } else {
                 set style $green
             }
+
+            if {[info exists file_deleted($file)]} {
+                set style $red
+            }
+            if {[info exists file_added($file)]} {
+                set style $green
+            }
+
             if {[info exists hlist]} {
                 set btnname [incr n]
 
@@ -532,7 +541,7 @@ proc loadit {} {
                 regsub "src/jdk.internal.jvmstat/share/classes/" $text JVMSTAT/ text
                 $hlist item create $file 1 -itemtype window -window $id -style $win
                 $hlist item create $file 2 -itemtype window -window $editbtn -style $win
-                $hlist item create $file 3 -itemtype text -text "$text"
+                $hlist item create $file 3 -itemtype text -text "$text" -style $style
             } else {
                 $list insert end $file
             }
@@ -618,7 +627,12 @@ proc compare_files {a b} {
 
 set therepo ""
 proc find_files_in_repo0 {cmd} {
-    global version version2 therepo
+    global version version2 therepo oldname file_added file_deleted
+
+    catch {  unset oldname }
+    catch {  unset file_added }
+    catch {  unset file_deleted }
+
     if {![info exists version]} {
         wm title . "${therepo}tksvn tip : latest edit"
         if {[catch {
@@ -626,8 +640,21 @@ proc find_files_in_repo0 {cmd} {
             if {$cmd == "git"} {
                 foreach line [split [exec $cmd status ] \n] {
                     if {[regexp "modified: +(.*)" $line dummy file]} {
-                        lappend files "M $file"
+                        set found($file) 1
+                    } elseif {[regexp "deleted: +(.*)" $line dummy file]} {
+                        set found($file) 1
+                        set file_deleted($file) 1
+                    } elseif {[regexp "new file: +(.*)" $line dummy file]} {
+                        set found($file) 1
+                        set file_added($file) 1
+                    } elseif {[regexp "renamed: +(.*) -> (.*)" $line dummy from to]} {
+                        set oldname($to) $from
+                        set found($to) 1
                     }
+                }
+
+                foreach file [lsort [array names found]] {
+                    lappend files "M $file"
                 }
             } else {
                 set files [split [eval exec $cmd status ] \n]
@@ -747,7 +774,12 @@ proc doit {file} {
                 do-launch -r $version -r $version2 [list $file]
             }
         } else {
-            do-launch [list $file]
+            global oldname
+            if {[info exists oldname($file)]} {
+                do-launch [list $file] -O [list $oldname($file)]
+            } else {
+                do-launch [list $file]
+            }
         }
     } e]} {
         puts $e
@@ -769,7 +801,7 @@ proc do-launch {args} {
     }
 
     if {[lindex $args 0] != "<key>" && 0} {
-        puts "$tkdiff $args"
+        #puts "$tkdiff $args"
     }
     set found 0
     foreach chan [array names accepted] {
@@ -782,7 +814,7 @@ proc do-launch {args} {
 
     if {[lindex $args 0] != "<key>"} {
         if {$found == 0} {
-            puts "$tkdiff $args"
+            #puts "$tkdiff $args"
             eval exec $tkdiff $args &
         }
     }
