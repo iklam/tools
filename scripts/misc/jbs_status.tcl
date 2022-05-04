@@ -10,6 +10,7 @@ set pat $N$N$N$N$N$N$N
 
 if {![regexp $pat $argv bugid] && ![regexp $pat [exec xclip -o] bugid]} {
     puts "Please specify bugid in command-line or clipboard"
+    exit 1
 }
 
 set url "https://bugs.openjdk.java.net/browse/JDK-$bugid"
@@ -28,7 +29,7 @@ if {[catch {
     if {[regexp {<title>([^<]+)</title>} $data dummy  title]} {
         regsub { - Java Bug System} $title "" title
         regsub {^[^\]]+\] } $title "" title
-        puts "    Title:              $title"
+        puts "    Title:              $bugid: $title"
     }
 
     regsub {<h4 class="toggle-title">Description</h4>.*} $data "" data

@@ -136,6 +136,7 @@ proc convert_html {jtr} {
 
     set header {
         <html>
+        <link href="/favicon2.ico" rel="icon" type="image/x-icon" />
         <head>
         <style>
         /* The navigation bar */
@@ -194,7 +195,7 @@ proc convert_html {jtr} {
     set num_child [regsub -all {\[ELAPSED: } $data "" foo]
 
     set fd [open $stat w+]
-    puts $fd "set g_data($jtr,reason) \"$reason\""
+    puts $fd "set g_data($jtr,reason) [list $reason]"
     puts $fd "set g_data($jtr,elapsed) $elapsed"
     puts $fd "set g_data($jtr,num_child) $num_child"
     close $fd

@@ -777,12 +777,23 @@ proc doit {file} {
         }
     }
 
+    if {[info exists version]} {
+        set v1 $version
+        set v2 $version2
+
+        # Exclude the filtering args for:
+        # tksvn -r 'jdk-17.0.2+7 -- . :!src/hotspot :!test/'
+
+        regsub " --.*" $v1 "" v1
+        regsub " --.*" $v2 "" v2
+    }
+
     if {[catch {
         if {[info exists version]} {
-            if {[string comp "$version2" ""] == 0} {
-                do-launch -r $version [list $file]
+            if {[string comp "$v2" ""] == 0} {
+                do-launch -r $v1 [list $file]
             } else {
-                do-launch -r $version -r $version2 [list $file]
+                do-launch -r $v1 -r $v2 [list $file]
             }
         } else {
             do-launch [list $file]
