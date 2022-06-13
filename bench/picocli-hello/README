@@ -1,0 +1,63 @@
+picocli-hello:
+    This is a JVM start-up benchmark based on picocli
+
+About maven:
+    https://maven.apache.org/guides/getting-started/maven-in-five-minutes.html
+
+About picocli:
+    https://aragost.com/blog/java/picocli-introduction/
+
+
+This project was created with these:
+
+$ mvn --version
+Apache Maven 3.6.3
+Maven home: /usr/share/maven
+Java version: 19-internal, vendor: Oracle Corporation, runtime: /jdk2/bld/images/jdk
+Default locale: en_US, platform encoding: UTF-8
+OS name: "linux", version: "5.13.0-28-generic", arch: "amd64", family: "unix"
+
+$ mvn archetype:generate -DgroupId=app -DartifactId=picocli-hello -DarchetypeArtifactId=maven-archetype-quickstart -DarchetypeVersion=1.4 -DinteractiveMode=false
+$ cd picocli-hello
+
+Add these to pom.xml:
+
+        <dependency>
+          <groupId>info.picocli</groupId>
+          <artifactId>picocli</artifactId>
+          <version>4.5.1</version>
+        </dependency>
+
+        <plugin>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <executions>
+            <execution>
+              <phase>package</phase>
+              <goals>
+                <goal>single</goal>
+              </goals>
+            </execution>
+          </executions>
+          <configuration>
+            <descriptorRefs>
+              <descriptorRef>jar-with-dependencies</descriptorRef>
+            </descriptorRefs>
+          </configuration>
+        </plugin>
+
+$ mvn assembly:assembly -DdescriptorId=jar-with-dependencies
+$ java -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1
+$ perf stat -r 10 java -cp target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1 > /dev/null
+ 
+ Performance counter stats for 'jdk/bin/java -cp target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1' (10 runs):
+
+            156.68 msec task-clock                #    1.530 CPUs utilized            ( +-  0.41% )
+             1,059      context-switches          #    6.886 K/sec                    ( +-  3.98% )
+                10      cpu-migrations            #   65.025 /sec                     ( +-  4.23% )
+             6,213      page-faults               #   40.400 K/sec                    ( +-  0.21% )
+       708,271,079      cycles                    #    4.606 GHz                      ( +-  0.21% )
+       749,731,280      instructions              #    1.06  insn per cycle           ( +-  0.11% )
+       147,595,033      branches                  #  959.742 M/sec                    ( +-  0.11% )
+         7,301,574      branch-misses             #    4.96% of all branches          ( +-  0.15% )
+
+          0.102399 +- 0.000931 seconds time elapsed  ( +-  0.91% )
