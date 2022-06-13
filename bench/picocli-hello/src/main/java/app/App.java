@@ -1,3 +1,5 @@
+// See https://aragost.com/blog/java/picocli-introduction/
+
 package app;
 
 import picocli.CommandLine;

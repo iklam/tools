@@ -72,9 +72,10 @@ proc convert_html {jtr} {
         if {[string first "\[20" $line] == 0 && [regexp $process_pat $line]} {
             # this is pretty useless
             continue;
-        } elseif {[string first "Command line: \[" $line] == 0} {
+        } elseif {[string first "Command line: \[" $line] == 0 ||
+                  [string first "\[COMMAND\]" $line] == 0} {
             incr num_logs
-            set line "<a name=log$num_logs>\[$num_logs\]</a> $line"
+            set line "<a name=log$num_logs><hr>\[$num_logs\]</a> $line"
         } elseif {[string first "logging std" $line] >= 0 && [regexp $pat $line dummy dummy filename]} {
             set filename [file tail $filename]
             set mts 0
@@ -142,7 +143,7 @@ proc convert_html {jtr} {
         /* The navigation bar */
         .navbar {
             overflow: hidden;
-            background-color: #333;
+            background-color: rgba(50, 50, 50, 0.3);
             position: fixed; /* Set the navbar to fixed position */
             top: 0; /* Position the navbar at the top of the page */
             left: 120;

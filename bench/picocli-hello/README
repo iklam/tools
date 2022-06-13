@@ -49,7 +49,7 @@ $ mvn assembly:assembly -DdescriptorId=jar-with-dependencies
 $ java -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1
 $ perf stat -r 10 java -cp target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1 > /dev/null
  
- Performance counter stats for 'jdk/bin/java -cp target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1' (10 runs):
+ Performance counter stats for 'java -cp target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1' (10 runs):
 
             156.68 msec task-clock                #    1.530 CPUs utilized            ( +-  0.41% )
              1,059      context-switches          #    6.886 K/sec                    ( +-  3.98% )
@@ -61,3 +61,48 @@ $ perf stat -r 10 java -cp target/picocli-hello-1.0-SNAPSHOT-jar-with-dependenci
          7,301,574      branch-misses             #    4.96% of all branches          ( +-  0.15% )
 
           0.102399 +- 0.000931 seconds time elapsed  ( +-  0.91% )
+
+# Using CDS (static)
+$ java -XX:DumpLoadedClassList=classlist -Xshare:off -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1
+$ java -XX:SharedArchiveFile=app_s.jsa -XX:SharedClassListFile=classlist -Xshare:dump -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar 
+$ perf stat -r 10 java -XX:SharedArchiveFile=app_s.jsa -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1 > /dev/null
+
+ Performance counter stats for 'jdk/bin/java -XX:SharedArchiveFile=app_s.jsa -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1' (10 runs):
+
+            103.57 msec task-clock                #    1.667 CPUs utilized            ( +-  0.17% )
+               901      context-switches          #    8.709 K/sec                    ( +-  4.14% )
+                12      cpu-migrations            #  115.991 /sec                     ( +-  4.68% )
+             4,968      page-faults               #   48.020 K/sec                    ( +-  0.24% )
+       471,907,508      cycles                    #    4.561 GHz                      ( +-  0.18% )
+       521,107,586      instructions              #    1.10  insn per cycle           ( +-  0.11% )
+       102,776,826      branches                  #  993.429 M/sec                    ( +-  0.12% )
+         4,392,800      branch-misses             #    4.29% of all branches          ( +-  0.21% )
+
+           0.06212 +- 0.00141 seconds time elapsed  ( +-  2.28% )
+
+
+# Using CDS (dynamic)
+$ java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=app.jsa -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1
+$ perf stat -r 10 java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=app.jsa -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1 > /dev/null
+
+ Performance counter stats for 'java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=app.jsa -cp ./target/picocli-hello-1.0-SNAPSHOT-jar-with-dependencies.jar app.App 1' (10 runs):
+
+            145.93 msec task-clock                #    1.759 CPUs utilized            ( +-  0.77% )
+               690      context-switches          #    4.685 K/sec                    ( +-  5.37% )
+                 8      cpu-migrations            #   54.318 /sec                     ( +-  5.73% )
+             5,963      page-faults               #   40.487 K/sec                    ( +-  0.14% )
+       666,824,665      cycles                    #    4.528 GHz                      ( +-  0.77% )
+       720,088,737      instructions              #    1.07  insn per cycle           ( +-  0.08% )
+       142,292,418      branches                  #  966.129 M/sec                    ( +-  0.08% )
+         6,935,192      branch-misses             #    4.88% of all branches          ( +-  0.26% )
+
+           0.08296 +- 0.00141 seconds time elapsed  ( +-  1.70% )
+
+Notes: with dynamic CDS archive, there are lots of warnings like the following, which lead to lower performance than static CDS.
+See https://bugs.openjdk.org/browse/JDK-8288334
+
+[0.120s][warning][cds] Skipping picocli/CommandLine$RegexTransformer: Old class has been linked
+[0.120s][warning][cds] Skipping picocli/CommandLine$ParseResult$GroupMatchContainer: Old class has been linked
+[0.120s][warning][cds] Skipping picocli/CommandLine$Model$CaseAwareLinkedMap$CaseAwareKeySet: Old class has been linked
+[0.120s][warning][cds] Skipping picocli/CommandLine$BuiltIn$BooleanConverter: Old class has been linked
+
