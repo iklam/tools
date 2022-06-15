@@ -53,7 +53,7 @@ proc make_gui {} {
     global distcc_order distcc_active distcc_selected distcc_btn
     package require Tix
     wm protocol . WM_DELETE_WINDOW exit
-    wm geometry . 480x900-0+165
+    wm geometry . 480x900-0+195
 
     set wrapStyle [tixDisplayStyle text]
     set nowrapStyle [tixDisplayStyle text]

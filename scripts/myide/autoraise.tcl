@@ -3,7 +3,7 @@
 set scripts_root [file dirname [info script]]/..
 source $scripts_root/lib/xraise.tcl
 
-wm geometry . -99+0
+wm geometry . -85+0
 wm transient .
 
 frame .e
@@ -68,7 +68,7 @@ proc update_focused_terminal {} {
             if {[regexp "Window state:\[\n\r\t \]*Focused" $data]} {
                 #puts doit
                 catch {
-                    set socket [socket localhost 9989]
+                    set socket [socket localhost 9990]
                     puts $socket raiseifhidden
                     close $socket
                 }
@@ -115,7 +115,7 @@ proc exec_gdb {} {
 
 proc exec_buf {} {
     catch {
-        exec bash -c {nohup wish /home/iklam/jdk/proj/ioisvn/scripts/emacs_buf_watch.tcl < /dev/null > /dev/null 2> /dev/null &}
+        exec bash -c "nohup wish $scripts_root/myide/emacs_buf_watch.tcl < /dev/null > /dev/null 2> /dev/null &"
     }
 }
 
