@@ -1,5 +1,5 @@
 #! /usr/bin/wish
-source [file dirname [info script]]/xraise.tcl
+source [file dirname [info script]]/../lib/xraise.tcl
 
 set instdir [file dirname [info script]]
 

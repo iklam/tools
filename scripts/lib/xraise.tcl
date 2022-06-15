@@ -26,7 +26,7 @@ proc xraise {name {force 0}} {
 
     set list [get_all_wm_windows $name]
     if {$list == {} && $name == "emacs23"} {
-        set name emacs@ioilinux
+        set name the_emacs
         set list [get_all_wm_windows $name]
     }
     #puts ==$list==
