@@ -33,6 +33,7 @@ proc main {} {
         if {!$existing} {
             make_gui
             socket -server do_connect 9988
+            socket -server do_distcc_connect 9989
         }
     }
 }
@@ -49,6 +50,7 @@ if {$tm > $tg} {
 
 proc make_gui {} {
     global hlist view_mode wrapStyle nowrapStyle hide_vm_errors
+    global distcc_order distcc_active distcc_selected distcc_btn
     package require Tix
     wm protocol . WM_DELETE_WINDOW exit
     wm geometry . 480x900-0+165
@@ -73,9 +75,22 @@ proc make_gui {} {
 	hlist.columns 2
     }]
     pack $sl -expand yes -fill both
+    frame $t.botrow1
+    frame $t.botrow2
+
     button $t.switch -text "Showing $view_mode" -command switch_view
 
-    pack $t.switch -side bottom
+    pack $t.botrow2 -side bottom -fill x
+    pack $t.botrow1 -side bottom -fill x
+    pack $t.switch -in $t.botrow2
+
+    foreach host $distcc_order {
+        set distcc_selected($host) 1
+        checkbutton $t.dist_$host -text "$host" -variable distcc_selected($host)
+        pack $t.dist_$host -in $t.botrow1 -side left
+        set distcc_active($host) 0
+        set distcc_btn($host) $t.dist_$host 
+    }
 
     set hlist [$sl subwidget hlist]
     $hlist config -selectforeground black -selectbackground #a0a0ff -command sync_emacs -font {{DejaVu Sans Mono} -10} -columns 2
@@ -95,6 +110,20 @@ proc make_gui {} {
     after 300 regresh_live_gdbs
     #after 600 set_the_icon
 }
+
+# This file should have something like this. The number is how many
+# concurrent jobs should be executed on that host
+#
+# set distcc_cpus(localhost)   32
+# set distcc_cpus(remotehost1) 16
+# set distcc_cpus(remotehost2) 16
+#
+# Dispatch all jobs to localhost first. When localhost is running 32 jobs
+# then start dispatching to remotehost1, then to remotehost2
+#
+# set distcc_order {localhost remotehost1 remotehost2}
+
+source ~/.distcc.config.tcl
 
 proc regresh_live_gdbs {} {
     global gdb_live last_gdbpid gdb_active
@@ -279,6 +308,78 @@ proc do_connect {fd addr port} {
     if {$view_mode != $target_mode} {
         set dont_send_key 1
         switch_view
+    }
+}
+
+
+proc do_distcc_connect {fd addr port} {
+    global distcc_cpus distcc_order distcc_active distcc_selected
+
+    set hosts {}
+    foreach host $distcc_order {
+        if {$distcc_selected($host)} {
+            lappend hosts $host
+        }
+    }
+
+    if {$hosts == {}} {
+        set host [lindex $distcc_order 0]
+        set hosts $host
+        set distcc_selected($host) 1
+    }
+
+
+    set found {}
+    foreach host $hosts {
+        if {$distcc_active($host) < $distcc_cpus($host)} {
+            set found $host
+            break
+        }
+    }
+
+    if {$found == {}} {
+        set min_over 10000000000
+        foreach host $hosts {
+            set over [expr $distcc_active($host) - $distcc_cpus($host)]
+            if {$over < $min_over} {
+                set $found $host
+                set min_over $over
+            }
+        }
+    }
+
+    puts $fd $host
+    flush $fd
+    incr distcc_active($host)
+    fileevent $fd readable [list do_distcc_fileevent $fd $host]
+
+    #parray distcc_active
+    update_hosts_stats
+}
+
+proc do_distcc_fileevent {fd host} {
+    global distcc_active
+
+    catch {
+        gets $fd
+    }
+    if {[eof $fd]} {
+        incr distcc_active($host) -1
+        catch {
+            close $fd
+        }
+    } else {
+        fileevent $fd readable [list do_distcc_fileevent $fd $host]
+    }
+    #parray distcc_active
+    update_hosts_stats
+}
+
+proc update_hosts_stats {} {
+    global distcc_order distcc_active distcc_btn
+
+    foreach host $distcc_order {
+        $distcc_btn($host) config -text "$host ($distcc_active($host))"
     }
 }
 
@@ -487,6 +588,9 @@ proc refresh_compile {{mode {}}} {
             if {[regexp {([^ ]+[.]cpp) } $line dummy cpp]} {
                 set found($obj) $cpp
             }
+            if {[regexp {ssh ([^ ]+)} $line dummy host]} {
+                set remote($obj) $host
+            }
         } elseif {[regexp ld.gold $line]} {
             lappend list ".... linking"
         }
@@ -495,7 +599,11 @@ proc refresh_compile {{mode {}}} {
 
     if {[info exists found]} {
         foreach n [array names found] {
-            lappend list [file tail $found($n)]
+            set file [file tail $found($n)]
+            catch {
+                set h($file) $remote($n)
+            }
+            lappend list $file
         }
     }
 
