@@ -72,7 +72,7 @@ proc make_gui {} {
     pack $f.ck0  $f.ck1 $f.ck2 $f.b1 $f.b2 $f.b3 $f.b4 -side left
     pack $f -side top -fill both -anchor w
     set sl [tixScrolledHList $t.sl -options {
-	hlist.columns 2
+	hlist.columns 4
     }]
     pack $sl -expand yes -fill both
     frame $t.botrow1
@@ -93,7 +93,7 @@ proc make_gui {} {
     }
 
     set hlist [$sl subwidget hlist]
-    $hlist config -selectforeground black -selectbackground #a0a0ff -command sync_emacs -font {{DejaVu Sans Mono} -10} -columns 2
+    $hlist config -selectforeground black -selectbackground #a0a0ff -command sync_emacs -font {{DejaVu Sans Mono} -10} -columns 4
     $hlist config -browsecmd browse_hlist
 
     foreach style [list $wrapStyle $nowrapStyle] {
@@ -328,30 +328,39 @@ proc do_distcc_connect {fd addr port} {
         set distcc_selected($host) 1
     }
 
-
+    # Find the host with the lowest usage
     set found {}
+    set maxusage 99999999.0
     foreach host $hosts {
-        if {$distcc_active($host) < $distcc_cpus($host)} {
+        set usage 1.0
+        catch {
+            set usage [expr $distcc_active($host).0 / $distcc_cpus($host).0]
+        }
+        #puts $host=$usage,max=$maxusage
+        if {$maxusage > $usage} {
+            set maxusage $usage
             set found $host
-            break
         }
     }
+    #puts found=$found
 
+    # Sanity -- if we can't find a host yet, pick the one who has lower number
+    # of tasks over its number of cores.
     if {$found == {}} {
         set min_over 10000000000
         foreach host $hosts {
             set over [expr $distcc_active($host) - $distcc_cpus($host)]
             if {$over < $min_over} {
-                set $found $host
+                set found $host
                 set min_over $over
             }
         }
     }
 
-    puts $fd $host
+    puts $fd $found
     flush $fd
-    incr distcc_active($host)
-    fileevent $fd readable [list do_distcc_fileevent $fd $host]
+    incr distcc_active($found)
+    fileevent $fd readable [list do_distcc_fileevent $fd $found]
 
     #parray distcc_active
     update_hosts_stats
@@ -608,14 +617,25 @@ proc refresh_compile {{mode {}}} {
     }
 
     set n 1
+    set m 1
+    set left 1
     foreach file [lsort -dict $list] {
         set host ""
         if {[info exists h($file)]} {
             set host $h($file)
         }
-        $hlist add $n -itemtype text -text $n
-        $hlist item create $n 1 -itemtype text -text [format %-10s%s $host $file]
-        incr n
+        set target [format %-10s%s $host $file]
+        if {$left == 1} {
+            $hlist add $n -itemtype text -text $m
+            $hlist item create $n 1 -itemtype text -text $target
+            set left 0
+        } else {
+            $hlist item create $n 2 -itemtype text -text $m
+            $hlist item create $n 3 -itemtype text -text $target
+            set left 1
+            incr n
+        }
+        incr m
     }
 
     if {$n > 0} {
