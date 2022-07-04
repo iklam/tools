@@ -33,7 +33,7 @@ proc main {} {
         if {!$existing} {
             make_gui
             socket -server do_connect 9988
-            socket -server do_distcc_connect 9989
+           #socket -server do_distcc_connect 9989
         }
     }
 }
@@ -86,7 +86,7 @@ proc make_gui {} {
 
     foreach host $distcc_order {
         set distcc_selected($host) 1
-        checkbutton $t.dist_$host -text "$host" -variable distcc_selected($host)
+        checkbutton $t.dist_$host -text "$host" -variable distcc_selected($host) -command update_available_hosts
         pack $t.dist_$host -in $t.botrow1 -side left
         set distcc_active($host) 0
         set distcc_btn($host) $t.dist_$host 
@@ -107,7 +107,7 @@ proc make_gui {} {
     bind $hlist <ButtonRelease-1> "frame_select $hlist %x %y"
     #bind $hlist <1> "wm focus $t"
 
-    after 300 regresh_live_gdbs
+    after 300 refresh_live_gdbs
     #after 600 set_the_icon
 }
 
@@ -125,7 +125,7 @@ proc make_gui {} {
 
 source ~/.distcc.config.tcl
 
-proc regresh_live_gdbs {} {
+proc refresh_live_gdbs {} {
     global gdb_live last_gdbpid gdb_active
     set f .t.gdbs
 
@@ -222,7 +222,7 @@ proc regresh_live_gdbs {} {
 
     #if {[info exists gdb_live]} {parray gdb_live}
 
-    after 300 regresh_live_gdbs
+    after 300 refresh_live_gdbs
 }
 
 proc get_window_name {xwinid} {
@@ -311,92 +311,23 @@ proc do_connect {fd addr port} {
     }
 }
 
-
-proc do_distcc_connect {fd addr port} {
-    global distcc_cpus distcc_order distcc_active distcc_selected
-
-    set cmd [gets $fd]
-    if {"$cmd" == "maxjobs"} {
-        set max 0
-        foreach host $distcc_order {
-            if {$distcc_selected($host)} {
-                incr max $distcc_cpus($host)
-            }
-        }
-
-        puts $fd $max
-        flush $fd
-        close $fd
-        return
-    }
-
-    set hosts {}
+proc update_available_hosts {} {
+    global distcc_selected distcc_order distcc_cpus
+    set avail 0
+    set fd [open ~/.distcc.selected w+]
     foreach host $distcc_order {
         if {$distcc_selected($host)} {
-            lappend hosts $host
+            incr avail $distcc_cpus($host)
+            set s 1
+        } else {
+            set s 0
         }
+        puts $fd "set distcc_selected($host) $s"
     }
-
-    if {$hosts == {}} {
-        set host [lindex $distcc_order 0]
-        set hosts $host
-        set distcc_selected($host) 1
-    }
-
-    # Find the host with the lowest usage
-    set found {}
-    set maxusage 99999999.0
-    foreach host $hosts {
-        set usage 1.0
-        catch {
-            set usage [expr $distcc_active($host).0 / $distcc_cpus($host).0]
-        }
-        #puts $host=$usage,max=$maxusage
-        if {$maxusage > $usage} {
-            set maxusage $usage
-            set found $host
-        }
-    }
-    #puts found=$found
-
-    # Sanity -- if we can't find a host yet, pick the one who has lower number
-    # of tasks over its number of cores.
-    if {$found == {}} {
-        set min_over 10000000000
-        foreach host $hosts {
-            set over [expr $distcc_active($host) - $distcc_cpus($host)]
-            if {$over < $min_over} {
-                set found $host
-                set min_over $over
-            }
-        }
-    }
-
-    puts $fd $found
-    flush $fd
-    incr distcc_active($found)
-    fileevent $fd readable [list do_distcc_fileevent $fd $found]
-
-    #parray distcc_active
-    update_hosts_stats
-}
-
-proc do_distcc_fileevent {fd host} {
-    global distcc_active
-
-    catch {
-        gets $fd
-    }
-    if {[eof $fd]} {
-        incr distcc_active($host) -1
-        catch {
-            close $fd
-        }
-    } else {
-        fileevent $fd readable [list do_distcc_fileevent $fd $host]
-    }
-    #parray distcc_active
-    update_hosts_stats
+    close $fd
+    set fd [open ~/.distcc.avail w+]
+    puts $fd $avail
+    close $fd
 }
 
 proc update_hosts_stats {} {
@@ -796,3 +727,4 @@ proc copy_the_clipboard {{copy_args 0}} {
 main
 refresh first
 watch_lastmake
+update_available_hosts

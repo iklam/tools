@@ -119,4 +119,117 @@ proc exec_buf {} {
     }
 }
 
+# This file should have something like this. The number is how many
+# concurrent jobs should be executed on that host
+#
+# set distcc_cpus(localhost)   32
+# set distcc_cpus(remotehost1) 16
+# set distcc_cpus(remotehost2) 16
+#
+# Dispatch all jobs to localhost first. When localhost is running 32 jobs
+# then start dispatching to remotehost1, then to remotehost2
+#
+# set distcc_order {localhost remotehost1 remotehost2}
+
+proc distcc_init {} {
+    global distcc_selected distcc_order distcc_cpus
+
+    uplevel #0 source ~/.distcc.config.tcl
+ 
+    foreach host $distcc_order {
+        set distcc_selected($host) 1
+        set distcc_active($host) 0
+    }
+    socket -server do_distcc_connect 9989
+}
+
+proc do_distcc_connect {fd addr port} {
+    global distcc_cpus distcc_order distcc_active distcc_selected
+
+    set hosts {}
+    foreach host $distcc_order {
+        if {$distcc_selected($host)} {
+            lappend hosts $host
+        }
+    }
+
+    if {$hosts == {}} {
+        set host [lindex $distcc_order 0]
+        set hosts $host
+        set distcc_selected($host) 1
+    }
+
+    # Find the host with the lowest usage
+    set found {}
+    set maxusage 99999999.0
+    foreach host $hosts {
+        set usage 1.0
+        catch {
+            set usage [expr $distcc_active($host).0 / $distcc_cpus($host).0]
+        }
+        #puts $host=$usage,max=$maxusage
+        if {$maxusage > $usage} {
+            set maxusage $usage
+            set found $host
+        }
+    }
+    #puts found=$found
+
+    # Sanity -- if we can't find a host yet, pick the one who has lower number
+    # of tasks over its number of cores.
+    if {$found == {}} {
+        set min_over 10000000000
+        foreach host $hosts {
+            set over [expr $distcc_active($host) - $distcc_cpus($host)]
+            if {$over < $min_over} {
+                set found $host
+                set min_over $over
+            }
+        }
+    }
+
+    puts $fd $found
+    flush $fd
+    incr distcc_active($found)
+    fileevent $fd readable [list do_distcc_fileevent $fd $found]
+
+    #parray distcc_active
+    #update_hosts_stats
+}
+
+proc do_distcc_fileevent {fd host} {
+    global distcc_active
+
+    catch {
+        gets $fd
+    }
+    if {[eof $fd]} {
+        incr distcc_active($host) -1
+        catch {
+            close $fd
+        }
+    } else {
+        fileevent $fd readable [list do_distcc_fileevent $fd $host]
+    }
+    #parray distcc_active
+    #update_hosts_stats
+}
+
+set lasttime 0
+proc update_host_selection {} {
+    global lasttime distcc_selected
+    set file ~/.distcc.selected
+    set time [file mtime $file]
+    if {$time > $lasttime} {
+        set lasttime $time
+        source  ~/.distcc.selected
+        parray distcc_selected
+    }
+    after 1000 update_host_selection
+}
+
+
+
 update_focused_terminal
+distcc_init
+update_host_selection

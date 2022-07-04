@@ -2,8 +2,6 @@ set host localhost
 
 if {[catch {
     set sock_fd [socket localhost 9989]
-    puts $sock_fd gethost
-    flush $sock_fd
     set host [gets $sock_fd]
 } err]} {
     if {[info exists env(DISTCC_TRACE)]} {
