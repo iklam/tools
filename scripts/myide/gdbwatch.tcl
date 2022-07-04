@@ -315,6 +315,21 @@ proc do_connect {fd addr port} {
 proc do_distcc_connect {fd addr port} {
     global distcc_cpus distcc_order distcc_active distcc_selected
 
+    set cmd [gets $fd]
+    if {"$cmd" == "maxjobs"} {
+        set max 0
+        foreach host $distcc_order {
+            if {$distcc_selected($host)} {
+                incr max $distcc_cpus($host)
+            }
+        }
+
+        puts $fd $max
+        flush $fd
+        close $fd
+        return
+    }
+
     set hosts {}
     foreach host $distcc_order {
         if {$distcc_selected($host)} {
