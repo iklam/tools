@@ -108,13 +108,13 @@ while 1 {
                 }
             }
             if {$progress > 30} {
-                puts stderr ""
+                catch {puts stderr ""}
             }
             foreach item [lsort -command mycomp $tmp] {
                 set f [lindex $item 0]
                 set c [lindex $item 1]
                 lappend list $f
-                puts "[format %4d [llength $list]] found [format %6d $c] $f"
+                catch {puts "[format %4d [llength $list]] found [format %6d $c] $f"}
                 set hasnew 1
             }
         }

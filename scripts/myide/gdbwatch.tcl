@@ -531,7 +531,7 @@ proc refresh_gdb {{mode {}}} {
 }
 
 proc refresh_compile {{mode {}}} {
-    global hlist
+    global hlist distcc_order distcc_active distcc_selected
 
     $hlist delete all
 
@@ -562,6 +562,10 @@ proc refresh_compile {{mode {}}} {
         }
     }
 
+    foreach host $distcc_order {
+        set distcc_active($host) 0
+    }
+
     set n 1
     set m 1
     set left 1
@@ -570,6 +574,13 @@ proc refresh_compile {{mode {}}} {
         if {[info exists h($file)]} {
             set host $h($file)
         }
+
+        if {[info exists distcc_selected($host)]} {
+            incr distcc_active($host)
+        } else {
+            incr distcc_active(localhost)
+        }
+
         set target [format %-10s%s $host $file]
         if {$left == 1} {
             $hlist add $n -itemtype text -text $m
@@ -589,6 +600,7 @@ proc refresh_compile {{mode {}}} {
     } else {
         schedule_refresh 5000
     }
+    update_hosts_stats
 }
 
 proc frame_select {hlist x y} {
