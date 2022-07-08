@@ -38,6 +38,11 @@ function __qq_complete () {
 alias grepedit='wish ${IOIGIT}/scripts/myide/grep_edit.tcl'
 # grep -lr java_lang_VirtualThread . | grep -v '~' | sort | grepedit
 
+#======================================================================
+# More GUI interations with Gnome Terminal
+#======================================================================
+
+alias wins='tclsh $IOIGIT/scripts/myide/show_terminal_windows.tcl $GNOME_TERNIMAL_NAME'
 
 #======================================================================
 # Header files
