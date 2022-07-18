@@ -70,7 +70,7 @@ proc read_cmdline {cmdline file replace} {
 }
 
 proc find_any_cmdline {} {
-    foreach file [lsort [glob -nocomplain hotspot/variant-server/libjvm/objs/*.o.cmdline]] {
+    foreach file [lsort [glob -nocomplain hotspot/variant-*/libjvm/objs/*.o.cmdline]] {
         set fd [open $file]
         set data [read $fd]
         close $fd

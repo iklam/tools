@@ -18,9 +18,16 @@ puts ""
 puts "$url"
 puts ""
 
-set fd [open "|xclip -i" w+]
-puts -nonewline $fd $url
-close $fd
+# -t means copy the bug title into the clipboard
+# otherwise copy the URL.
+if {[regexp {[-]t} $argv]} {
+    set copy_title 1
+} else {
+    set copy_title 0
+    set fd [open "|xclip -i" w+]
+    puts -nonewline $fd $url
+    close $fd
+}
 
 flush stdout
 
@@ -29,7 +36,13 @@ if {[catch {
     if {[regexp {<title>([^<]+)</title>} $data dummy  title]} {
         regsub { - Java Bug System} $title "" title
         regsub {^[^\]]+\] } $title "" title
-        puts "    Title:              $bugid: $title"
+        set t "$bugid: $title"
+        puts "    Title:              $t"
+        if {$copy_title} {
+            set fd [open "|xclip -i" w+]
+            puts -nonewline $fd $t
+            close $fd
+        }
     }
 
     regsub {<h4 class="toggle-title">Description</h4>.*} $data "" data

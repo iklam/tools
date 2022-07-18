@@ -10,7 +10,7 @@ foreach pat $locations {
             set PWD [pwd]
             if {[catch {
                 cd $dir
-                foreach b [split [exec git branch] \n] {
+                foreach b [split [exec bash -c "git branch 2>&1"] \n] {
                     set b [string trim $b]
                     if {$b != ""} {
                         set iscurrent [regsub {^[*] } $b "" b]
@@ -36,7 +36,9 @@ foreach pat $locations {
                     }
                 }
             } xx]} {
+                puts [pwd]
                 puts $xx
+                exit 1
             }
             cd $PWD
         }

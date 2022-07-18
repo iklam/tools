@@ -19,6 +19,7 @@ complete -F __qq_complete qq
 complete -F __qq_complete re
 complete -F __qq_complete whoincludes
 complete -F __qq_complete wi10
+complete -F __qq_complete wi
 
 #function __qq_complete () {
 #    local i
@@ -58,3 +59,4 @@ function wi10 () {
     whoincludes "$@" | head -10
 }
 
+alias wi=wi10
