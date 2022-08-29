@@ -1,3 +1,4 @@
+#! /bin/wish
 # Allow the user to configure whether to automatically emacs or tkdiff is automatically raised
 
 set scripts_root [file dirname [info script]]/..

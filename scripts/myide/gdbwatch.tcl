@@ -61,16 +61,22 @@ proc make_gui {} {
     set t [frame .t]
     pack $t -fill both -expand yes
     set f [frame .t.toprow]
+    set f2 [frame .t.toprow2]
     set hide_vm_errors 1
     checkbutton $f.ck0 -text "Hide Errors" -variable hide_vm_errors -command refresh
     checkbutton $f.ck1 -text "Emacs"   -variable enable_sync_emacs
     checkbutton $f.ck2 -text "GDB"   -variable enable_sync_gdb
     button $f.b1 -text "Emacs" -command {force_sync emacs}
     button $f.b2 -text "GDB" -command {force_sync gdb}
-    button $f.b3 -text "Copy" -command copy_the_clipboard
-    button $f.b4 -text "Copy (args)" -command {copy_the_clipboard 1}
-    pack $f.ck0  $f.ck1 $f.ck2 $f.b1 $f.b2 $f.b3 $f.b4 -side left
+    pack $f.ck0  $f.ck1 $f.ck2 $f.b1 $f.b2 -side left
+
+    button $f2.b3 -text "Copy" -command copy_the_clipboard
+    button $f2.b4 -text "Copy (args)" -command {copy_the_clipboard 1}
+    checkbutton $f2.ck1 -text "Group errors" -variable group_errors -command refresh
+    pack $f2.b3 $f2.b4  $f2.ck1 -side left
+
     pack $f -side top -fill both -anchor w
+    pack $f2 -side top -fill both -anchor w
     set sl [tixScrolledHList $t.sl -options {
 	hlist.columns 4
     }]
@@ -410,7 +416,11 @@ proc refresh {{mode {}}} {
 }
 
 proc refresh_make {{mode {}}} {
-    global hlist stack2file wrapStyle nowrapStyle
+    global hlist stack2file wrapStyle nowrapStyle group_errors
+    if {![info exists hlist]} {
+        return
+    }
+
     $hlist delete all
 
     for {set i 0} {$i < 10 && ![info exists fd]} {incr i} {
@@ -433,6 +443,19 @@ proc refresh_make {{mode {}}} {
         if {[regexp {([^/]+[.].pp:[0-9]+:[0-9]+: error:.*)} $line tail] ||
             [regexp {([^/]+[.].pp:[0-9]+:[0-9]+:.*required from here*)} $line tail] ||
             [regexp {([^/]+[.].pp:[0-9]+:[0-9]+: note: in expansion of macro 'assert'.*)} $line tail]} {
+
+            if {$group_errors} {
+                if {[regexp {(.*pp):} $line dummy file] && ![info exists seen($file)]} {
+                    set num $frameid
+                    $hlist add $frameid -itemtype text -text $num -style $nowrapStyle
+                    $hlist item create $frameid 1 -itemtype text -text $file
+                    set seen($file) 1
+                    incr frameid
+                    lappend stack2file $file
+                }
+                continue
+            }
+
             if {![info exists seen($tail)]} {
                 set seen($tail) 1
                 set num $frameid

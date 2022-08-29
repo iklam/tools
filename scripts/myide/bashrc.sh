@@ -11,11 +11,16 @@ alias qe='qq -nofind'
 
 # Quick Quick (edit in emacs)
 # qq = confirmation needed if file has changed on disk
+# qw = open in github (web)
 # qqq = no ask. Any edits have been lost.
+# qqclip = open the file in the clipboard text
 alias qq='tclsh ${IOIGIT}/scripts/myide/qq.tcl'
+alias qw='tclsh ${IOIGIT}/scripts/myide/qq.tcl -w'
 alias qqq='REVERT=1 qq'
+alias qqclip='tclsh ${IOIGIT}/scripts/myide/qq-clipboard.tcl'
 
 complete -F __qq_complete qq
+complete -F __qq_complete qw
 complete -F __qq_complete re
 complete -F __qq_complete whoincludes
 complete -F __qq_complete wi10

@@ -80,6 +80,12 @@ if test "$NODUMP" != "true"; then
     done
 fi
 
+echo Syncing disk .....
+sync
+sleep 1
+sync
+sleep 1
+
 for loop in $(seq 1 $loops); do
     for i in 1 2; do   
         true ========================================$loop.$i

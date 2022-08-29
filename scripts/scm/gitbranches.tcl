@@ -1,6 +1,6 @@
 # Look at all the branches of all the repos and sort them by time, so I know what I am working on
 
-set locations {/jdk2/*/open}
+set locations {/jdk2/*/open /jdk3/*/open}
 
 set maxlen 0
 foreach pat $locations {
@@ -24,6 +24,7 @@ foreach pat $locations {
                             set date [clock scan $date]
                         }
                         regsub "^/jdk2/" $dir "" dir
+                        regsub "^/jdk3/" $dir "" dir
                         regsub "/open$" $dir "" dir
 
                         set item $dir:$b

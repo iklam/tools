@@ -1,4 +1,4 @@
-% CDS Class Loading Micro Benchmarks
+# CDS Class Loading Micro Benchmarks
 
   * [version-bench.sh](version-bench.sh)
 

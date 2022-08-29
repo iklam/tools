@@ -1,6 +1,14 @@
 # Open fles in emacs in a bunch of different situations.
 
 source [file dirname [info script]]/../lib/xraise.tcl
+source [file dirname [info script]]/../lib/common.tcl
+
+# -w means open in web (github)
+if {[pop_arg w]} {
+    set open_in_web 1
+} else {
+    set open_in_web 0
+}
 
 if {![info exists env(REPO_ROOT)]} {
     set env(REPO_ROOT) /jdk2/gil
@@ -29,7 +37,17 @@ if {[llength $argv] == 0} {
 }
 
 proc openfile {file {lineno {}}} {
-    edit_in_emacs $file $lineno
+    global open_in_web
+    if {$open_in_web} {
+        regsub {^.*/open/} $file "" file
+        set url https://github.com/openjdk/jdk/blob/master/$file
+        puts $url
+        set fd [open "|xclip -i" w+]
+        puts -nonewline $fd $url
+        close $fd
+    } else {
+        edit_in_emacs $file $lineno
+    }
     exit
 }
 
@@ -83,6 +101,7 @@ if {[lindex $argv 0] == "-nofind"} {
 
 proc tosrc {file} {
     regsub {[.]o$} $file ".cpp" file
+    regsub {[.]$}  $file ".cpp" file
     return $file
 }
 

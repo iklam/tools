@@ -396,6 +396,10 @@ proc translate_version {version} {
 proc find_files_scm_mode {} {
     global argv version version2 repo env
 
+    # Try to add -r to be helpful (and might confuse ya!)
+    if {[llength $argv] <= 2 && [lindex $argv 0] != "-r"} {
+        set argv [list -r [lindex $argv 0] [lindex $argv 1]]
+    }
     if {[lindex $argv 0] == "-R" && [llength $argv] == 2} {
         set argv [list -r - [lindex $argv 1]]
     }
@@ -442,8 +446,13 @@ proc find_files_scm_mode {} {
         catch {
             cd $env(REPO_ROOT)/open
             set d [pwd]
-            set hg 1
-            puts "HG in [pwd]"
+            if {[info exists .hg]} {
+                set hg 1
+                puts "HG in [pwd]"
+            } else {
+                set git 1
+                puts "GIT in [pwd]"
+            }
         }
     }
 
@@ -522,6 +531,11 @@ proc loadit {} {
                 set style $blue
             }
 
+            # NOTE: on Ubuntu 22.04, the following can become very slow. Killing the ibus-daemon
+            # process seems to fix it, at least temporarily.
+            # See https://gitlab.gnome.org/GNOME/gnome-shell/-/issues/3125
+            set use_window 1
+
             if {[info exists hlist]} {
                 set btnname [incr n]
 
@@ -530,7 +544,11 @@ proc loadit {} {
 
                 set editbtn [button $hlist.${btnname}-edit -padx 4 -pady 0 -bg [$hlist cget -bg] -text \u27a9 -bd 2 -highlightthickness 0]
                 bind $editbtn <ButtonRelease-1> "edit_release $editbtn $file %x %y"
-                $hlist add "$file"  -itemtype window -window $selbtn -style $win
+                if {$use_window} {
+                    $hlist add "$file"  -itemtype window -window $selbtn -style $win
+                } else {
+                    $hlist add "$file"  -text xx
+                }
 
                 set id [label $hlist.${btnname}-id -padx 2 -pady 3 -bg [$hlist cget -bg] -bd 0 -text $btnname -justify left -font $font]
 
@@ -543,8 +561,10 @@ proc loadit {} {
                 regsub "src/hotspot/os_cpu/" $text H_/ text
                 regsub "test/hotspot/jtreg/" $text HS/JTREG/ text
                 regsub "src/jdk.internal.jvmstat/share/classes/" $text JVMSTAT/ text
-                $hlist item create $file 1 -itemtype window -window $id -style $win
-                $hlist item create $file 2 -itemtype window -window $editbtn -style $win
+                if {$use_window} {
+                    $hlist item create $file 1 -itemtype window -window $id -style $win
+                    $hlist item create $file 2 -itemtype window -window $editbtn -style $win
+                }
                 $hlist item create $file 3 -itemtype text -text "$text" -style $style
             } else {
                 $list insert end $file

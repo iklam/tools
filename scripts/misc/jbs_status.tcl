@@ -9,8 +9,15 @@ set N {[0-9]}
 set pat $N$N$N$N$N$N$N
 
 if {![regexp $pat $argv bugid] && ![regexp $pat [exec xclip -o] bugid]} {
-    puts "Please specify bugid in command-line or clipboard"
-    exit 1
+    catch {
+        # get the bug id from the active git branch
+        set data [exec git branch]
+        regexp "\[*\] ($pat)" $data dummy bugid
+    }
+    if {![info exists bugid]} {
+        puts "Please specify bugid in command-line or clipboard"
+        exit 1
+    }
 }
 
 set url "https://bugs.openjdk.java.net/browse/JDK-$bugid"
