@@ -6,6 +6,9 @@ set linenum [lindex $argv 1]
 set diff    [lindex $argv 2]
 set quit    [lindex $argv 3]
 
+# Remove the Emacs breadcrumb 
+regsub {[<][^>]+[>]} $file "" file
+
 # Emacs passes "line 123"
 regsub {^[Ll]ine } $linenum "" linenum
 
