@@ -1,5 +1,9 @@
 package require Tcl 8.4
 
+# env(TIMING)
+# env(UPDATE_ALL)
+# env(VERBOSE)
+
 set jtreg_scriptroot [file dirname [info script]]
 source [file dirname $jtreg_scriptroot]/lib/process_lib.tcl
 
@@ -38,6 +42,9 @@ proc build_worklists {} {
         }
         set g_reports($f) $mtfile
         if {$mthtml < $mtfile || $mtstat < $mtfile || [info exists env(UPDATEALL)]} {
+            if {[info exists env(VERBOSE)]} {
+                puts "Updating $f"
+            }
             set g_updates($f) 1
             incr num_work_items
         } else {
@@ -69,7 +76,9 @@ proc do_work {} {
         set g_data($jtr,reason)    [lindex $results 0]
         set g_data($jtr,elapsed)   [lindex $results 1]
         set g_data($jtr,num_child) [lindex $results 2]
-        #puts $status
+        if {[info exists env(VERBOSE)]} {
+            puts $status
+        }
     }
 
     if {[info exists env(TIMING)]} {

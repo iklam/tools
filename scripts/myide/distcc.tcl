@@ -16,6 +16,10 @@ if {$host == "localhost"} {
     set doit 1
 }
 
+if {[info exists env(DISTCC_TRACE)]} {
+    puts "distcc: host = $host"
+}
+
 if {$doit} {
     set cmd "ssh $host"
 
