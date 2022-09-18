@@ -45,6 +45,8 @@ public static void main(java.lang.String[]);
     24: return
 ```
 
+## All the bytecodes that connect `Concat0.main` to `StringConcatHelper.simpleConcat`
+
 To see all the bytecodes that are executed for this small program, do this with a debug JDK. With JDK 20,
 you should see only three `invokedynamic` bytecodes being executed, so you can easily find the interesting stuff.
 Also, make sure CDS is enabled -- this reduces the number of total bytecodes from about 2 million to about 400,000.
@@ -118,10 +120,12 @@ static jobject java.lang.StringConcatHelper.simpleConcat(jobject, jobject)
   406920     0  nofast_aload_0
 ```
 
+## Resolution of the ConstantPool entry for the the `invokedynamic` bytecode
+
 The rest of the document discusses all the intermediate steps that take us from `Concat0.main()`
 to `StringConcatHelper.simpleConcat()`.
 
-To make it easier to examine the bytecodes, first apply [this patch](https://github.com/openjdk/jdk/pull/9957)
+To make it easier to examine the bytecodes, first apply [this patch - JDK PR #9957](https://github.com/openjdk/jdk/pull/9957)
 and then build a slowdebug variant of the JDK. Without this patch, you will need to manually
 look up all the methods and constant pools involved in the execution, which may be very tedious. 
 
@@ -190,7 +194,9 @@ already been resolved. Its `ConstantPoolCacheEntry` points to two important thin
 - A C++ `Method` pointer to `Invokers$Holder.linkToTargetMethod(Object, Object)` at address `0x00000008000f13a0`.
 - An "appendix" oop of the type `java.lang.invoke.BoundMethodHandle$Species_LL` at `0x000000062d826ad8`
 
-Note that the bytecodes leading up to the invokedynamic look like this
+## `Invokers$Holder.linkToTargetMethod`
+
+Note that the bytecodes leading up to the `invokedynamic` look like this:
 
 ```
 static void Concat0.main(jobject)
@@ -201,11 +207,11 @@ static void Concat0.main(jobject)
   406886     3  iconst_2
   406887     4  if_icmpge 24
   406888     7  getstatic 7 <Concat0.s/Ljava/lang/String;> 
-  406889    10  invokedynamic bsm=31 13 <makeConcatWithConstants(Ljava/lang/String;)Ljava/lang/String;>
+>>406889    10  invokedynamic bsm=31 13 <makeConcatWithConstants(Ljava/lang/String;)Ljava/lang/String;>
 ```
 
-So the Java stack already has one item, the String from the static field `Concat0.s`. The interpreter executes the
-invokedynamic bytecode like this:
+So the Java stack already has one item, the String from the static field `Concat0.s`. The interpreter executes this
+`invokedynamic` bytecode like this:
 
 - push the "appendix" object object into the stack
 - jump to the `Invokers$Holder.linkToTargetMethod(Object, Object)` method.
@@ -217,10 +223,12 @@ static jobject java.lang.invoke.Invokers$Holder.linkToTargetMethod(jobject, jobj
   406890     0  aload_1
   406891     1  checkcast 12 <java/lang/invoke/MethodHandle>
   406892     4  nofast_aload_0
-  406893     5  invokehandle 28 <java/lang/invoke/MethodHandle.invokeBasic(Ljava/lang/Object;)Ljava/lang/Object;> 
+>>406893     5  invokehandle 28 <java/lang/invoke/MethodHandle.invokeBasic(Ljava/lang/Object;)Ljava/lang/Object;> 
 ```
 
-The `invokehandle` bytecode at bytecode number 5 is resolved like this:
+## `MethodHandle.invokeBasic`
+
+The `invokehandle` bytecode at bytecode number 5, which calls `MethodHandle.invokeBasic`, is resolved like this:
 
 ```
 (gdb) call findmethod2("java/lang/invoke/Invokers$Holder", "linkToTargetMethod",
@@ -253,7 +261,7 @@ You may wonder why the bytecode trace suddenly jumps to `LambdaForm$MH/0x0000000
   406890     0  aload_1
   406891     1  checkcast 12 <java/lang/invoke/MethodHandle>
   406892     4  nofast_aload_0
-  406893     5  invokehandle 28 <java/lang/invoke/MethodHandle.invokeBasic(Ljava/lang/Object;)Ljava/lang/Object;> 
+>>406893     5  invokehandle 28 <java/lang/invoke/MethodHandle.invokeBasic(Ljava/lang/Object;)Ljava/lang/Object;> 
  |
  |  huh??
  V
@@ -290,7 +298,11 @@ jump_from_method_handle(method, ...);    // assembler
 ```
 
 Since `this.form` points to the method `LambdaForm$MH+0x0000000801000400.invoke()`, that's
-how the interpreter starts executing in there. At the entry of this method, we have two parameters:
+how the interpreter starts executing in there.
+
+## `LambdaForm$MH/0x0000000801000400.invoke`
+
+At the entry of this method, we have two parameters:
 
 - local0 is the "appendix" object from above (`0x000000062d826ad8` - an instance of `BoundMethodHandle$Species_LL`)
 - local1 is the "variable" part of the concatenation (the string in `Concat0.s`)
@@ -303,7 +315,7 @@ d = "000" + Concat0.s;
 
 The `"000"` part of the concatenation is considered a "constant", so it's not passed as a parameter by
 the `invokedynamic` bytecode. Instead, it's recorded inside the appendix object. You can see
-it being loaded by the following code (from the `argL1` field of the appendix object on bytecode 6):
+it being loaded by the following code (from the `argL1` field of the appendix object at bytecode 6):
 
 ```
 static jobject java.lang.invoke.LambdaForm$MH/0x0000000801000400.invoke(jobject, jobject)
@@ -311,7 +323,7 @@ static jobject java.lang.invoke.LambdaForm$MH/0x0000000801000400.invoke(jobject,
   406895     1  checkcast 12 <java/lang/invoke/BoundMethodHandle$Species_LL>
   406896     4  dup
   406897     5  astore_0
-  406898     6  fast_agetfield 16 <java/lang/invoke/BoundMethodHandle$Species_LL.argL1/Ljava/lang/Object;> 
+>>406898     6  fast_agetfield 16 <java/lang/invoke/BoundMethodHandle$Species_LL.argL1/Ljava/lang/Object;> 
   406899     9  astore_2
   406900    10  aload_0
   406901    11  fast_agetfield 19 <java/lang/invoke/BoundMethodHandle$Species_LL.argL0/Ljava/lang/Object;> 
@@ -330,7 +342,8 @@ MethodHandle mh = this.argL0;        // 0x000000062d81f830, an instance of Direc
 mh.invokeBasic(this.argL1, local1);  // "000", Concat0.s
 ```
 
-We see another call to `invokeBasic`, which loads `mh.form` and eventually jumps to the `Method*`. This time, `mh` looks like this:
+We see another call to `invokeBasic`, which loads `mh.form` and eventually jumps to the `Method*`.
+This time, `mh` is the `argL0` field, which looks like this:
 
 ```
 {0x000000062d81f830} - klass: 'java/lang/invoke/DirectMethodHandle'
@@ -344,7 +357,9 @@ We see another call to `invokeBasic`, which loads `mh.form` and eventually jumps
              in 'java/lang/StringConcatHelper' (c5b03e78)
 ```
 
-So we end up inside `java/lang/invoke/DirectMethodHandle$Holder.invokeStatic`:
+## `DirectMethodHandle$Holder.invokeStatic`
+
+The above `invokeBasic` call brings us to `java/lang/invoke/DirectMethodHandle$Holder.invokeStatic`:
 
 ```
 static jobject java.lang.invoke.DirectMethodHandle$Holder.invokeStatic(jobject, jobject, jobject)
@@ -374,6 +389,8 @@ invokeStatic(DirectMethodHandle dmh, Object s1, Object s2) {
     MemberName mn = this.member;           // = StringConcatHelper.simpleConcat
     MethodHandle.linkToStatic(mn, s1, s2); // s1 == "000", s2 == Concat0.s
 ```
+
+## `MethodHandle.linkToStatic`
 
 [`MethodHandle.linkToStatic`](https://github.com/openjdk/jdk/blob/3beca2db0761f8172614bf1b287b694c8595b498/src/java.base/share/classes/java/lang/invoke/MethodHandle.java#L584)
 is similar to `MethodHandle.invokeBasic`. It's also a native method implemented in
@@ -428,3 +445,55 @@ java.lang.Exception: Stack trace
 Note that we don't see a call frame for `MethodHandle.invokeBasic()` or `MethodHandle.linkToStatic()`.
 These two methods are essentially tail calls -- their own callframe gets taken over by the
 target method.
+
+## Examining the generated LambdaForm class
+
+You can dump the bytecodes of the generated `LambdaForm$MH+0x0000000801000400` class by calling
+the `findclass` function introduced in [JDK PR #9957](https://github.com/openjdk/jdk/pull/9957):
+
+```
+(gdb) call findclass("java/lang/invoke/LambdaForm$MH+0x0000000801000400", 0x18)
+"Executing findclass"
+flags (bitmask):
+   0x01  - print names of methods
+   0x02  - print bytecodes
+   0x04  - print the address of bytecodes
+   0x08  - print info for invokedynamic
+   0x10  - print info for invokehandle
+
+[  0] 0x0000000801000400 java/lang/invoke/LambdaForm$MH+0x0000000801000400 loader data: 0x00007ffff0235320 of 'bootstrap' has a class holder
+0x00007fffc04012e0 invoke : (Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+   0 fast_aload_0
+   1 checkcast 12 <java/lang/invoke/BoundMethodHandle$Species_LL>
+   4 dup
+   5 astore_0
+   6 fast_agetfield 16 <java/lang/invoke/BoundMethodHandle$Species_LL.argL1/Ljava/lang/Object;> 
+   9 astore_2
+  10 fast_aaccess_0
+  11 fast_agetfield 19 <java/lang/invoke/BoundMethodHandle$Species_LL.argL0/Ljava/lang/Object;> 
+  14 astore_3
+  15 aload_3
+  16 checkcast 21 <java/lang/invoke/MethodHandle>
+  19 aload_2
+  20 aload_1
+  21 invokehandle 24 <java/lang/invoke/MethodHandle.invokeBasic(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;> 
+  ConstantPoolCacheEntry:   2  (0x00007fffc0401498)  [00|e9|   24]
+                 [   0x00007fffc0001d48]
+                 [   0x0000000000000000]
+                 [   0xffffffff82400003]
+                 -------------
+  Method (native): 0x00007fffc0001d48 java/lang/invoke/MethodHandle.invokeBasic(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+  24 areturn
+
+0x00007fffc04013b8 <clinit> : ()V
+   0 ldc java.lang.invoke.LambdaForm$MH/0x0000000801000400
+   2 invokestatic 34 <java/lang/invoke/MethodHandles.classData(Ljava/lang/Class;)Ljava/lang/Object;> 
+   5 checkcast 36 <java/util/List>
+   8 astore_0
+   9 fast_aload_0
+  10 iconst_0
+  11 invokeinterface 40 <java/util/List.get(I)Ljava/lang/Object;> 
+  16 checkcast 42 <java/lang/invoke/LambdaForm>
+  19 putstatic 44 <java/lang/invoke/LambdaForm$MH+0x0000000801000400._D_0/Ljava/lang/invoke/LambdaForm;> 
+  22 return
+```
