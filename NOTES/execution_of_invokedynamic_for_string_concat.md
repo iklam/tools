@@ -166,7 +166,8 @@ flags (bitmask):
                  [   0x0000000000000003]
                  [   0xffffffff83400002]
                  -------------
-  Method: 0x00000008000f13a0 java/lang/invoke/Invokers$Holder.linkToTargetMethod(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+  Method: 0x00000008000f13a0 java/lang/invoke/Invokers$Holder.linkToTargetMethod
+                (Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
   appendix: java.lang.invoke.BoundMethodHandle$Species_LL 
 {0x000000062d826ad8} - klass: 'java/lang/invoke/BoundMethodHandle$Species_LL'
  - ---- fields (total size 5 words):
