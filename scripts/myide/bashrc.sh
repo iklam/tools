@@ -2,6 +2,51 @@
 #
 # You need to set IOIGIT to the root of this repo
 
+alias tools='cd ${IOIGIT}'
+
+#======================================================================
+# GIT
+#======================================================================
+
+alias gitref='git commit -a --amend --date=now --no-edit'
+alias gitout='git log origin/master..'
+#alias gitout='git log --branches --not --remotes=origin'
+alias gitb='git branch'
+alias gitsw='git switch'
+alias gitst='git status'
+alias gitl='git log'
+alias gitbh='tclsh ${IOIGIT}/scripts/scm/git_branch_hierarchy.tcl'
+
+alias gitbranches='tclsh ${IOIGIT}/scripts/scm/gitbranches.tcl'
+alias gitblame='tclsh ${IOIGIT}/scripts/scm/gitblame.tcl'
+alias gitweb='tclsh ${IOIGIT}/scripts/scm/gitweb.tcl'
+
+# Used for diffing two diff files
+alias filterdiff='tclsh ${IOIGIT}/scripts/scm/filter_diff.tcl'
+
+function git-refresh () {
+    (
+        (set -x; git branch) || return;
+        (set -x; git status) || return;
+        read -p "Are you sure? [yN] " -n 1 -r
+        echo    # (optional) move to a new line
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo skipped
+            return
+        fi
+        git pull upstream master || return;
+
+        git push origin
+    )
+}
+
+function current-branch () {
+    (
+        cdo
+        git branch | grep '[*]' | cut -b 3-
+    )
+}
+
 #======================================================================
 # Open files in emacs
 #======================================================================
@@ -38,6 +83,24 @@ function __qq_complete () {
 }
 
 #======================================================================
+# Diff
+#======================================================================
+alias tkdiff='${IOIGIT}/scripts/scm/tkdiff'
+alias tksvn='${IOIGIT}/scripts/scm/tksvn'
+
+#======================================================================
+# JBS
+#======================================================================
+
+alias jbs='tclsh ${IOIGIT}/scripts/misc/jbs_status.tcl'
+
+function git2jbs () {
+    local line=$(git log $1 | grep '[0-9][0-9].....:' | head -1)
+    echo https://bugs.openjdk.java.net/browse/JDK-$(echo $line | sed -e 's/:.*//g')
+    echo "    $(echo $line | sed -e 's/.......://g')"
+}
+
+#======================================================================
 # More GUI interations with emacs
 #======================================================================
 
@@ -65,3 +128,4 @@ function wi10 () {
 }
 
 alias wi=wi10
+

@@ -15,8 +15,9 @@
 #   0000001-archive-resolved-classes
 #     1000002-archive-resolved-fields-fozen
 
-set pat {([^ ]+) + [0-9a-z]+ \[(.*)\]}
+set pat {([^ ]+) +[0-9a-z]+ \[(.*)\]}
 set fd [open "|git branch -vv"]
+set current {}
 while {![eof $fd]} {
     set line [gets $fd]
     if {[regexp $pat $line dummy branch parentinfo]} {
@@ -24,7 +25,9 @@ while {![eof $fd]} {
         set ahead 0
         set behind 0
         if {![regexp {(.*): ahead ([0-9]+), behind ([0-9]+)} $parentinfo dummy parent ahead behind]} {
-            if {![regexp {(.*): ahead ([0-9]+)} $parentinfo dummy parent ahead]} {
+            if {[regexp {(.*): behind ([0-9]+)} $parentinfo dummy parent behind]} {
+                # ...
+            } elseif {![regexp {(.*): ahead ([0-9]+)} $parentinfo dummy parent ahead]} {
                 if {[regexp {(.*): gone} $parentinfo dummy parent]} {
                     set has(zzgone) 1
                     lappend children(zzgone) $parent
@@ -39,12 +42,27 @@ while {![eof $fd]} {
         set has($parent) 1
         lappend children($parent) $branch
         #puts $branch=$parent=$ahead=$behind
+    } elseif {[regexp {([^ ]+) + [0-9a-z]+ } $line dummy branch]} {
+        set has(zzgone) 1
+        lappend children(zzgone) $branch
+        set p($branch) zzgone
+    } else {
+        continue
+    }
+
+    if {[regexp {^[*] } $line]} {
+        set current $branch
     }
 }
 
 proc dump {branch prefix} {
-    global children a b
+    global children a b current
 
+    if {$current == $branch} {
+        puts -nonewline "==> "
+    } else {
+        puts -nonewline "    "
+    }
     puts -nonewline $prefix$branch
     if {[info exists a($branch)] && $a($branch) != 0} {
         puts -nonewline " +$a($branch)"

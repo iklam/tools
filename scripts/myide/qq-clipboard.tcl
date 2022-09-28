@@ -15,6 +15,7 @@ if {[info exists env(TEST_QQ)]} {
         #catch {set logfd [open /dev/pts/7 w+]; puts $logfd "Using $logfd"}
         catch {set logfd [open /tmp/qqclip-debug w+]; puts $logfd "Using $logfd"}
     }
+    #set logfd [open /dev/pts/8 w+]
 }
 
 proc log {str} {
