@@ -20,7 +20,11 @@ proc read_cmdline {cmdline file replace} {
     set data [string trim [read $fd]]
     close $fd
 
-    regsub {.*/jdkbuildhack.sh CXX} $data /home/iklam/devkit/latest/bin/g++ data
+    if {[regexp /jdk11 $data]} {
+        regsub {.*/jdkbuildhack.sh CXX} $data /home/iklam/devkit/for-jdk11/bin/g++ data
+    } else {
+        regsub {.*/jdkbuildhack.sh CXX} $data /home/iklam/devkit/latest/bin/g++ data
+    }
     regsub " -c " $data " -c -save-temps " data
     regsub " -pipe " $data " " data
 

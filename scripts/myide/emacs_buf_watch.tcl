@@ -87,10 +87,10 @@ proc update_hlist {} {
         set path $paths($buffer)
         set name $buffer
         set repo ""
-        if {[regexp {/jdk2*/bld/([a-z]+)} $path dummy repo] ||
-            [regexp {/jdk2*/([a-z]+)/} $path dummy repo] ||
-            [regexp {/jdk3*/bld/([a-z]+)} $path dummy repo] ||
-            [regexp {/jdk3*/([a-z]+)/} $path dummy repo]} {
+        if {[regexp {/jdk2*/bld/([^/]+)} $path dummy repo] ||
+            [regexp {/jdk2*/([^/]+)/} $path dummy repo] ||
+            [regexp {/jdk3*/bld/([^/]+)} $path dummy repo] ||
+            [regexp {/jdk3*/([^/]+)/} $path dummy repo]} {
             regsub {<[^>]+>} $name "" name
         }
 
@@ -405,7 +405,7 @@ proc do_select {} {
                         set matched 0
                     }
                 } else {
-                    if {[string first $repo $r] != 0} {
+                    if {[string first $repo $r] < 0} {
                         set matched 0
                     }
                 }

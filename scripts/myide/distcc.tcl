@@ -21,7 +21,9 @@ if {[info exists env(DISTCC_TRACE)]} {
 }
 
 if {$doit} {
-    set cmd "ssh $host"
+    # distcc_exec.sh will first cd to the correct directory
+    # (all the remote hosts see the same directory layout as the current host, thanks to NFS mount)
+    set cmd "ssh $host /jdk3/tools/scripts/myide/distcc_exec.sh [pwd]"
 
     foreach a $argv {
         regsub -all \" $a \\\\\" a

@@ -34,7 +34,7 @@ proc print_compilation_error {file} {
     set file [file tail $file]
     set file [file root $file]
     catch {
-        set file [exec find /jdk/tmp/$env(JTREG_DIR) -name $file.jtr | xargs ls -tr | tail -1]
+        set file [exec find $env(HOME)/tmp/$env(JTREG_DIR) -name $file.jtr | xargs ls -tr | tail -1]
     }
     if {[file exists $file]} {
         set fd [open $file]

@@ -115,8 +115,11 @@ proc exec_gdb {} {
 }
 
 proc exec_buf {} {
-    catch {
+    global scripts_root
+    if {[catch {
         exec bash -c "nohup wish $scripts_root/myide/emacs_buf_watch.tcl < /dev/null > /dev/null 2> /dev/null &"
+    } err]} {
+        puts $err
     }
 }
 
