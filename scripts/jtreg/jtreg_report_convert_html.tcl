@@ -40,8 +40,22 @@ proc convert_html {jtr} {
     set fd [open $jtr r+]
     set link $jtr
     regsub -all "#" $link %23 link
-    set data "<pre STYLE='white-space: pre-wrap;'>"
+    set data "<body onload='location.href=\"#log1\"'><pre STYLE='white-space: pre-wrap;'>"
+    append data {
+        <script>
+        function myKeyPress(e) {
+            console.log(e.key)
+            element = document.getElementById("llog" + e.key);
+            if (element != null) {
+                console.log(element);
+                element.scrollIntoView();
+            }
+        }
+        window.addEventListener("keydown", myKeyPress);
+        </script>
+    }
     set pat {(logging std... to) (.*[.]std...)}
+    set hserr_pat {(#) (.*log)}
     set num_logs 0
     set jtrdata ""
 
@@ -75,33 +89,15 @@ proc convert_html {jtr} {
         } elseif {[string first "Command line: \[" $line] == 0 ||
                   [string first "\[COMMAND\]" $line] == 0} {
             incr num_logs
-            set line "<a name=log$num_logs><hr>\[$num_logs\]</a> $line"
+            set line "<div id=llog$num_logs><a name=log$num_logs><br><hr>\[$num_logs\]</a> $line</div>"
         } elseif {[string first "logging std" $line] >= 0 && [regexp $pat $line dummy dummy filename]} {
-            set filename [file tail $filename]
-            set mts 0
-            set mtd 0
-            set s work/scratch/$filename
-            set d $jtr_data_dir/$filename
-            if {[file exists $s]} {
-                set mts [file mtime $s]
-            }
-            if {[file exists $d]} {
-                set mtd [file mtime $d]
-            }
-            if {$mts > 0 || $mtd > 0} {
-                if {$mts >= $mtd} {
-                    set file $s
-                } else {
-                    set file $d
-                }
-                regsub {^[.]/} $file "" file
+            set line [fix_link $jtr_data_dir $pat $filename $line]
+        } elseif {[string first "hs_err_pid" $line] >= 0 && [regexp $hserr_pat $line dummy dummy filename]} {
+            set line [fix_link $jtr_data_dir $hserr_pat $filename $line]
 
-                set size [file size $file]
-                set link /~iklam/jtreg/$env(JTREG_DIR)/$file
-                regsub -all \# $link %23 link
-                set file "<a href=$link>$filename</a> [format {%7d bytes} $size]"
-                regsub $pat $line "\\1 $file" line
-            }
+            incr num_logs
+            set line "<div id=llog$num_logs><a name=log$num_logs></a>$line</div>"
+            set iserr($num_logs) 1
         } elseif {[string first .log $line] > 0} {
             set xpat "^# (/jdk.*/tmp/$env(JTREG_DIR)/work/scratch/.*.log)"
             if {[regexp $xpat $line dummy path]} {
@@ -154,7 +150,7 @@ proc convert_html {jtr} {
         .navbar a {
             float: left;
             display: block;
-            color: #f2f2f2;
+            color: #ff0000;
             text-align: center;
             padding: 14px 16px;
             text-decoration: none;
@@ -177,8 +173,16 @@ proc convert_html {jtr} {
     }
 
     append header "<a href=[file tail $jtr]>orig</a>"
+    set lnum 0
+    set enum 0
     for {set i 1} {$i <= $num_logs} {incr i} {
-        append header "<a href='#log${i}'>$i</a>"
+        if {[info exists iserr($i)]} {
+            incr enum
+            append header "<font color=#ff0000><a href='#log${i}'>E$enum</a></font>"
+        } else {
+            incr lnum
+            append header "<a href='#log${i}'>$lnum</a>"
+        }
     }
     append header {
         </div>
@@ -204,6 +208,38 @@ proc convert_html {jtr} {
     puts $reason
     puts $elapsed
     puts $num_child
+}
+
+
+proc fix_link {jtr_data_dir pat filename line} {
+    global env
+
+    set filename [file tail $filename]
+    set mts 0
+    set mtd 0
+    set s work/scratch/$filename
+    set d $jtr_data_dir/$filename
+    if {[file exists $s]} {
+        set mts [file mtime $s]
+    }
+    if {[file exists $d]} {
+        set mtd [file mtime $d]
+    }
+    if {$mts > 0 || $mtd > 0} {
+        if {$mts >= $mtd} {
+            set file $s
+        } else {
+            set file $d
+        }
+        regsub {^[.]/} $file "" file
+
+        set size [file size $file]
+        set link /~iklam/jtreg/$env(JTREG_DIR)/$file
+        regsub -all \# $link %23 link
+        set file "<a href=$link>$filename</a> [format {%7d bytes} $size]"
+        regsub $pat $line "\\1 $file" line
+    }
+    return $line
 }
 
 convert_html [lindex $argv 0]

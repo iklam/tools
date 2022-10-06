@@ -7,6 +7,7 @@
 source [file dirname [info script]]/../lib/xraise.tcl
 
 set DEBUG 1
+set logfd stdout
 
 if {[info exists env(TEST_QQ)]} {
     set logfd stdout
@@ -147,7 +148,7 @@ if {[regexp ^/ $text]} {
             log "opening with qq: $text" 
         }
         log "Running QQ \"$text\" in [pwd]"
-        exec tclsh [file dirname [info script]]/qq.tcl $text 2> /tmp/t.stderr > /tmp/t.stdout
+        exec tclsh [file dirname [info script]]/qq.tcl $text 2>@ $logfd >@ $logfd
     } err]} {
         log $err
     }

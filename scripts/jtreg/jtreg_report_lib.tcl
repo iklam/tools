@@ -63,6 +63,9 @@ proc do_work {} {
     set me_started [clock milliseconds]
 
     foreach f [array names g_updates] {
+        if {[info exists env(TIMING)]} {
+            puts "tclsh $jtreg_scriptroot/jtreg_report_convert_html.tcl $f"
+        }
         process_dispatch $f "tclsh $jtreg_scriptroot/jtreg_report_convert_html.tcl $f"
     }
 
@@ -232,7 +235,7 @@ proc findlogfiles {} {
     }
     set has_found 1
 
-    set fd [open "|find . -name *.stdout -print -o -name *.stderr -print "]
+    set fd [open "|find . -name *.stdout -print -o -name *.stderr -print -o -name hs_err_*.stderr -print"]
     while {![eof $fd]} {
         set file [gets $fd]
         #puts $file

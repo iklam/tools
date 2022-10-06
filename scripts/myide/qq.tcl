@@ -58,7 +58,8 @@ proc try_open_file_and_exit {file} {
         ## puts "$file (lineno =  $lineno)"
     }
 
-    if {[regexp {^([^: ]+/[^: /]+):(.*)} $file dummy file text]} {
+    if {([regexp {^([^:]+):(.*)} $file dummy file text] && [puts --$file--; file exists $file]) ||
+        [regexp {^([^: ]+/[^: /]+):(.*)} $file dummy file text]} {
         # This is typical output from grep, such as
         # ./closed/src/hotspot/share/jfr/jfr.cpp:jint Jfr::initialize_subsystems(TRAPS) {...}
         ##puts "cleaned up $file"
@@ -107,6 +108,7 @@ proc tosrc {file} {
 
 if {[llength $argv] == 1} {
     set file [lindex $argv 0]
+    try_open_file_and_exit $file
     set file [tosrc $file]
     set repofile $env(REPO_ROOT)/open/$file
     if {![file exists $file] && [file exists $repofile]} {
@@ -166,7 +168,7 @@ foreach root $roots {
     set started [clock seconds]
     puts -nonewline "Searching under $root ..."
     flush stdout
-    set cmd "| find $root -name .hg -prune -o -type f -a -iname [list $file] -print | grep -v objectweb/asm"
+    set cmd "| find $root -name .hg -prune -o -type f -a -name [list $file] -print | grep -v objectweb/asm"
     puts " [expr [clock seconds] - $started] secs"
     puts $cmd
     set list {}

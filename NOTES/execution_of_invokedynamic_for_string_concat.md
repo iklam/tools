@@ -214,7 +214,7 @@ static void Concat0.main(jobject)
 So the Java stack already has one item, the String from the static field `Concat0.s`. The interpreter executes this
 `invokedynamic` bytecode like this:
 
-- push the "appendix" object object into the stack
+- push the "appendix" object object into the stack as a trailing parameter ([see templateTable_x86.cpp](https://github.com/openjdk/jdk/blob/536c9a512ea90d97a1ae5310453410d55db98bdd/src/hotspot/cpu/x86/templateTable_x86.cpp#L3569-L3583))
 - jump to the `Invokers$Holder.linkToTargetMethod(Object, Object)` method.
 
 The following are the bytecodes that are executed inside `linkToTargetMethod`:
