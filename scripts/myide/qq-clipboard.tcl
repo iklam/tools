@@ -140,7 +140,7 @@ if {[regexp ^/ $text]} {
                 cd $env(REPO_ROOT)/open/src/java.base
             }
 
-            if {![regexp {[./]} $text] && [regexp {^[A-Z]} $text]} {
+            if {![regexp {[./]} $text] && [regexp {^[A-Z]} $text] && ![file exists $text]} {
                 # This is probably the name of a Java class
                 set text $text.java
             }

@@ -14,6 +14,8 @@ if {![info exists env(REPO_ROOT)]} {
     set env(REPO_ROOT) /jdk2/gil
 }
 
+#puts "qq.tcl: pwd = [pwd]"
+
 foreach {a b} {
     o    open
     c    closed
@@ -81,7 +83,7 @@ proc try_open_file_and_exit {file} {
         }
     }
 
-    puts $lineno=$file
+    puts $lineno=$file=[pwd]=[file exists $file]
 
     if {[file exists $file] || !$find} {
         if {$lineno != ""} {
