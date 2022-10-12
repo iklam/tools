@@ -1,14 +1,14 @@
 # Some very basic Java test programs that you use a lot
 
-all: HelloWorld.jar Lambda0.jar
+all: HelloWorld.jar Lambda0.jar Concat0.jar
 
 clean:
 	rm -rf *~ classes tmp *.jar *.jsa *.classlist
 
-ifdef JDK8_HOME
-JAVA  = $(JDK8_HOME)/bin/java
-JAVAC = $(JDK8_HOME)/bin/javac
-JAR   = $(JDK8_HOME)/bin/jar
+ifdef JAVA_HOME
+JAVA  = $(JAVA_HOME)/bin/java
+JAVAC = $(JAVA_HOME)/bin/javac
+JAR   = $(JAVA_HOME)/bin/jar
 else
 JAVA  = java
 JAVAC = javac
@@ -31,5 +31,8 @@ HelloWorld.jar: HelloWorld.java
 
 Lambda0.jar: Lambda0.java
 	$(call build,Lambda0)
+
+Concat0.jar: Concat0.java
+	$(call build,Concat0)
 
 
