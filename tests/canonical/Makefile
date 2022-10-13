@@ -1,6 +1,6 @@
 # Some very basic Java test programs that you use a lot
 
-all: HelloWorld.jar Lambda0.jar Concat0.jar
+all: HelloWorld.jar Lambda0.jar Concat0.jar ConcatMany.jar
 
 clean:
 	rm -rf *~ classes tmp *.jar *.jsa *.classlist
@@ -35,4 +35,6 @@ Lambda0.jar: Lambda0.java
 Concat0.jar: Concat0.java
 	$(call build,Concat0)
 
+ConcatMany.jar: ConcatMany.java
+	$(call build,ConcatMany)
 

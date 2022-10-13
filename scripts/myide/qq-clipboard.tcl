@@ -144,6 +144,12 @@ if {[regexp ^/ $text]} {
                 # This is probably the name of a Java class
                 set text $text.java
             }
+
+            # java.lang.invoke.InvokerBytecodeGenerator.generateCustomizedCode(java.base@20-internal/InvokerBytecodeGenerator.java:749)
+            # ->
+            # InvokerBytecodeGenerator.java:749
+            regexp {[^ ]*[\(][a-z.]*@[^/]+/([A-Za-z0-9_]+[.]java:[0-9]+)} $text dummy text
+
             log "opening with qq: pwd = [pwd]" 
             log "opening with qq: $text" 
         }
