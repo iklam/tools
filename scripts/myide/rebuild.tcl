@@ -19,7 +19,6 @@ proc read_cmdline {cmdline file replace} {
     set fd [open $cmdline]
     set data [string trim [read $fd]]
     close $fd
-
     if {[regexp /jdk11 $data]} {
         regsub {.*/jdkbuildhack.sh CXX} $data /home/iklam/devkit/for-jdk11/bin/g++ data
     } else {
@@ -27,7 +26,7 @@ proc read_cmdline {cmdline file replace} {
     }
     regsub " -c " $data " -c -save-temps " data
     regsub " -pipe " $data " " data
-
+    set data "$data "
     if {"$replace" != ""} {
         regsub {objs/[^ ]+.d.tmp } $data "objs/$replace.d.tmp " data
         regsub {objs/[^ ]+.o }     $data "objs/$replace.o " data
@@ -57,6 +56,13 @@ proc read_cmdline {cmdline file replace} {
     append data " 2>&1 | tee /tmp/lastmake; exit \${PIPESTATUS\[0\]}"
 
     set fd [open /tmp/ioireb.sh w+]
+    if {[file exists ./hotspot/linux_amd64_compiler2/debug/]} {
+        # This is JDK8
+        puts $fd "cd hotspot/linux_amd64_compiler2/debug"
+    } elseif {[file exists ./hotspot/linux_amd64_compiler2/fastdebug/]} {
+        # This is JDK8
+        puts $fd "cd hotspot/linux_amd64_compiler2/fastdebug"
+    }
     puts $fd "$data"
     close $fd
 
@@ -85,6 +91,26 @@ proc find_any_cmdline {} {
     return ""
 }
 
+proc find_jdk8_cmdline {} {
+    set fake tmp.cmdline
+    set logfile ~/[file tail [pwd]].log
+    if {[file exists $logfile]} {
+        set fd [open $logfile]
+        while {![eof $fd]} {
+            set line [gets $fd]
+            if {[regexp {[-]o [0-9a-zA-Z_]*[.]o } $line]} {
+                set fd2 [open $fake w+]
+                puts $fd2 $line
+                close $fd
+                close $fd2
+                return $fake
+            }
+        }
+        close $fd
+    }
+    return ""
+}
+
 proc rebuild {file} {
     regsub .*/ $file "" file
     regsub {[.].*} $file "" file
@@ -97,8 +123,15 @@ proc rebuild {file} {
         if {$cmdline != ""} {
             set args [read_cmdline $cmdline $file $file]
         } else {
-            puts "Cannot find cmdline for $file.cpp"
-            return
+            # JDK8 doesn't save *.cmdline files, so let's get it
+            # from a "make LOG=debug" log file
+            set cmdline [find_jdk8_cmdline]
+            if {$cmdline != ""} {
+                set args [read_cmdline $cmdline $file $file]
+            } else {
+                puts "Cannot find cmdline for $file.cpp"
+                return
+            }
         }
     }
     #exec cat $cmdline >@ stdout

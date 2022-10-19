@@ -7,7 +7,11 @@ set dirs [list [pwd]]
 if {[regexp {^[a-z]} $pattern]} {
     set pwd [pwd]
     if {[info exists env(REPO_ROOT)]} {
-        set target $env(REPO_ROOT)/open/src/hotspot
+        if {[file exists $env(REPO_ROOT)/open/src/hotspot]} {
+            set target $env(REPO_ROOT)/open/src/hotspot
+        } else {
+            set target $env(REPO_ROOT)/hotspot
+        }
     } else {
         if {[regexp {^/jdk2/emmett/jdk8/hotspot} $pwd]} {
             set target /jdk2/emmett/jdk8/hotspot
