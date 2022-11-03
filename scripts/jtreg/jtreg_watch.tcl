@@ -7,7 +7,9 @@ if {[llength $argv] > 0} {
 
 text .t -height 40
 pack .t -expand yes -fill both
-
+catch {
+    wm title . $env(JTREG_DIR)
+}
 if {[info exists env(JTR_START)]} {
     set start $env(JTR_START)
 } else {

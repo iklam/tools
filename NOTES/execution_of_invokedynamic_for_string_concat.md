@@ -125,12 +125,13 @@ static jobject java.lang.StringConcatHelper.simpleConcat(jobject, jobject)
 The rest of the document discusses all the intermediate steps that take us from `Concat0.main()`
 to `StringConcatHelper.simpleConcat()`.
 
-To make it easier to examine the bytecodes, first apply [this patch - JDK PR #9957](https://github.com/openjdk/jdk/pull/9957)
-and then build a slowdebug variant of the JDK. Without this patch, you will need to manually
+To make it easier to examine the bytecodes, use build a slowdebug version of JDK 20 with
+the [JDK-8292699](https://bugs.openjdk.org/browse/JDK-8292699) fix. Without this fix, you will need to manually
 look up all the methods and constant pools involved in the execution, which may be very tedious. 
 
 Then, load the JDK inside gdb. Set a breakpoint at `exit_globals()` and start running the `Concat0` class. After `Concat0.main()` has
-finished, you will land in `exit_globals()`. Use the `findmethod` function introduced by the above patch to
+finished, you will land in `exit_globals()`. Use the `findmethod` function introduced in
+[JDK-8292699](https://bugs.openjdk.org/browse/JDK-8292699) to
 examine the `Concat0.main()` method. Note that you can use the bitmask in the thrid parameter to control
 what gets printed:
 
