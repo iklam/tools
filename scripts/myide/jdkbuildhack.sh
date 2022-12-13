@@ -2,6 +2,7 @@
 # This script tries to avoid doing unnecessary stuff during JDK builds:
 #   + avoid unnecessary copying of libjvm.so
 #   + avoids building the gtest binaries when doing an xmd/xmp/xmfd build
+#   + support distributed build via ./distcc.tcl
 #
 # This script needs jdkspecgmkpatch.sh to patch up the spec.gmk
 

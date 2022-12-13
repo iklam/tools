@@ -55,15 +55,32 @@ while {![eof $fd]} {
     }
 }
 
+set x $current
+while {1} {
+    #puts $x
+    set active($x) 1
+    if {[info exists p($x)]} {
+        set x $p($x)
+    } else {
+        break
+    }
+}
+
 proc dump {branch prefix} {
-    global children a b current
+    global children a b current active
 
     if {$current == $branch} {
         puts -nonewline "==> "
     } else {
         puts -nonewline "    "
     }
-    puts -nonewline $prefix$branch
+    if {[info exists active($branch)]} {
+        set mark "* "
+    } else {
+        set mark "  "
+    }
+
+    puts -nonewline $prefix$mark$branch
     if {[info exists a($branch)] && $a($branch) != 0} {
         puts -nonewline " +$a($branch)"
     }
@@ -74,8 +91,18 @@ proc dump {branch prefix} {
 
     if {[info exists children($branch)]} {
         set prefix "$prefix  "
-        foreach c [lsort $children($branch)] {
-            dump $c $prefix
+
+        for {set n 0} {$n < 2} {incr n} {
+            foreach c [lsort $children($branch)] {
+                if {[info exists active($c)]} {
+                    set m 0
+                } else {
+                    set m 1
+                }
+                if {$n == $m} {
+                    dump $c $prefix
+                }
+            }
         }
     }
 }

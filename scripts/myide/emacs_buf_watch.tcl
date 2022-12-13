@@ -106,7 +106,8 @@ proc update_hlist {} {
         $hlist item create $buffer 2 -itemtype text -text $repo
     }
     if {[info exists next_hilite]} {
-        $hlist selection set $next_hilite
+        #regsub {<[^>]+>} $next_hilite "" next_hilite
+        catch {$hlist selection set $next_hilite}
         set lastfile $next_hilite
         unset next_hilite
     }
@@ -308,14 +309,16 @@ proc kill30 {} {
 
 proc kill {} {
     global hlist lastfile
-    if {"$lastfile" != "" && ![$hlist info hidden $lastfile]} {
-        set next [find_next_hilite $lastfile]
+    catch {
+        if {"$lastfile" != "" && ![$hlist info hidden $lastfile]} {
+            set next [find_next_hilite $lastfile]
 
-        set file $lastfile
-        set lastfile ""
-        set lasttime 0
-        exec emacsclient -e "(kill-buffer \"$file\")"
-        after idle refresh
+            set file $lastfile
+            set lastfile ""
+            set lasttime 0
+            exec emacsclient -e "(kill-buffer \"$file\")"
+            after idle refresh
+        }
     }
 }
 
