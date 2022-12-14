@@ -5,7 +5,7 @@ if {[llength $argv] > 0} {
     set jdk [lindex $argv 0]
 }
 
-text .t -height 40
+text .t -height 40 -width 120
 pack .t -expand yes -fill both
 catch {
     wm title . $env(JTREG_DIR)
@@ -27,6 +27,19 @@ set last_report_time 0
 set has_parsed_java_files 0
 
 set errors_len 0
+set totalFail 0
+proc update_title {} {
+    global start totalFail env
+    set time [clock seconds]    
+    set elapsed [clock format [expr $time - $start] -format %M:%S]
+
+    set title "$env(JTREG_DIR) $elapsed"
+    if {$totalFail > 0} {
+        append title " - failed = $totalFail"
+    }
+    wm title . $title
+}
+
 proc print_compilation_error {file} {
     global errors_len env
     set max_err 20
@@ -114,7 +127,7 @@ proc update_report_callback {handle output} {
 proc doit {args} {
     global start numpassed numfailed numerror numfinish has_started start_test_time end_test_time running
     global failures last_test test_elapsed last_report_time has_parsed_java_files
-    global updating_report final_report
+    global updating_report final_report env totalFail
 
     if {[info exists final_report]} {
         return
@@ -173,6 +186,7 @@ proc doit {args} {
         set failures($line) 1
         incr numfailed
         set line "**FAIL $last_test"
+        incr totalFail 1
     } elseif {[regexp {^Test results: } $line]} {
         set test_elapsed [clock format [expr $time - $start_test_time] -format %M:%S]
         set end_test_time $time
@@ -183,10 +197,13 @@ proc doit {args} {
         set test_elapsed [clock format [expr $time - $end_test_time] -format %M:%S]
     }
 
+    set id 0
+    regexp {jtreg([0-9])} $env(JTREG_DIR) dummy id
+
     set numrun [llength [array size running]]
     set elapsed [clock format [expr $time - $start] -format %M:%S]
     if {!$skip} {
-        puts [format {%s [%3d %3d %3d] %s %s} $elapsed $numfailed $numpassed $numfinish $test_elapsed $line]
+        puts [format {%s %s [%3d %3d %3d] %s %s} $id $elapsed $numfailed $numpassed $numfinish $test_elapsed $line]
         if {"$test_elapsed" != ""} {
             set test_elapsed "     "
         }
@@ -310,6 +327,7 @@ proc updateit {} {
             set last_update_ms $time_ms
         }
     }
+    update_title 
     update idletasks
 }
 
