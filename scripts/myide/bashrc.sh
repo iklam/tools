@@ -14,6 +14,7 @@ alias gitout='git log origin/master..'
 alias gitb='git branch'
 alias gitsw='git switch'
 alias gitst='git status'
+alias gitcp='git cherry-pick'
 alias gitl='git log'
 alias gitbh='tclsh ${IOIGIT}/scripts/scm/git_branch_hierarchy.tcl'
 alias gitds='git diff --stat'
@@ -27,6 +28,7 @@ alias gitweb='tclsh ${IOIGIT}/scripts/scm/gitweb.tcl'
 alias filterdiff='tclsh ${IOIGIT}/scripts/scm/filter_diff.tcl'
 
 function git-refresh () {
+    if git branch | grep -q '[*] master'; then
     (
         (set -x; git branch) || return;
         (set -x; git status) || return;
@@ -40,6 +42,9 @@ function git-refresh () {
 
         git push origin
     )
+    else
+        echo "You are not on master branch??"
+    fi
 }
 
 function current-branch () {

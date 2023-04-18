@@ -94,10 +94,16 @@ proc get_title {b} {
     return $table($b)
 }
 
-if {[lindex $argv 0] == "-v"} {
-    set verbose 1
-} else {
-    set verbose 0
+set verbose 0
+set activeonly 0
+
+foreach arg $argv {
+    if {"$arg" == "-v"} {
+        set verbose 1
+    }
+    if {"$arg" == "-c"} {
+        set activeonly 1
+    }
 }
 
 set dirfmt "%-${maxlen}s %s%s%s"
@@ -111,6 +117,9 @@ foreach item [lsort -command compare_by_timestamp [array names seen]] {
         set c " *"
     } else {
         set c "  "
+        if {!$activeonly} {
+            continue
+        }
     }
 
     set pr_title ""

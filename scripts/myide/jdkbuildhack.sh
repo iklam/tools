@@ -72,7 +72,7 @@ cmd=IOI_ORIG_${cmd}
 #echo $cmd
 cmd=${!cmd}
 #echo $cmd
-
+#echo ==$EXTRA0$DISTCC$xcmd==
 if test "$EXTRA0$DISTCC$xcmd" = "ioidistccCXX"; then
     DISTCC=distcc
 else
@@ -82,7 +82,7 @@ fi
 # (a) echo just the name
 if test "$QUIET_BUILD" = ""; then
     #$cmd
-    echo $DISTCC $bldtype $(echo "$@" | sed -e 's/.* //g' -e 's/.*frandom-seed=//g' | sed -e 's/[^ ]*.src.hotspot.//')
+    echo $DISTCC: $bldtype $(echo "$@" | sed -e 's/.* //g' -e 's/.*frandom-seed=//g' | sed -e 's/[^ ]*.src.hotspot.//')
 fi
 
 # (b) echo the entire cmdline

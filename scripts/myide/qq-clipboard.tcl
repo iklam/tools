@@ -42,6 +42,9 @@ if {$text == ""} {
 
 regsub "^at " $text "" text
 
+regsub "^#  Internal Error \\(" $text "" text
+regsub "\\), pid=" $text " " text
+
 if {[regexp {[(]([A-Za-z0-9_]+[.]java:[0-9]+)[)]} $text dummy fileline]} {
     set text "$fileline"
 } else {

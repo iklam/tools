@@ -15,7 +15,7 @@
 #   0000001-archive-resolved-classes
 #     1000002-archive-resolved-fields-fozen
 
-set pat {([^ ]+) +[0-9a-z]+ \[(.*)\]}
+set pat {([^ ]+) +[0-9a-z]+ \[([^\\\]]*)\]}
 set fd [open "|git branch -vv"]
 set current {}
 while {![eof $fd]} {
@@ -41,8 +41,7 @@ while {![eof $fd]} {
         set has($branch) 1
         set has($parent) 1
         lappend children($parent) $branch
-        #puts $branch=$parent=$ahead=$behind
-    } elseif {[regexp {([^ ]+) + [0-9a-z]+ } $line dummy branch]} {
+    } elseif {[regexp {([^ ]+) +[0-9a-z]+ } $line dummy branch]} {
         set has(zzgone) 1
         lappend children(zzgone) $branch
         set p($branch) zzgone
