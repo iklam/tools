@@ -194,7 +194,8 @@ proc make_ui {} {
     bind .always_up <ButtonRelease-1> {toggle_always_up %x %y}
 
     bind . <Visibility>    set_visibility_changed
-    bind . <FocusIn>       {clear_hidden; dofocus .w}
+    bind . <FocusIn>       {puts "focus in"; clear_hidden; dofocus .w}
+    bind . <FocusOut>      {focus_out %W}
 
     bind $hlist <1>               {if {[hlist_down %x %y]} break}
     bind $hlist <ButtonRelease-1> {if {[hlist_up   %x %y]} break}
@@ -253,10 +254,19 @@ proc hlist_up {x y} {
 }
 
 set the_focus ""
+set lost_focus 0
+
+proc focus_out {w} {
+    global lost_focus
+    puts "focus out $w"
+    if {"$w" == "."} {
+        set lost_focus 1
+    }
+}
 
 proc dofocus {w} {
-    global the_focus
-
+    global the_focus lost_focus
+    set lost_focus 0
     if {[wm overrideredirect .]} {
         wm withdraw .
         wm overrideredirect . 0
@@ -459,7 +469,7 @@ proc main {} {
 }
 
 proc do_connect {fd addr port} {
-    global is_hidden always_up
+    global is_hidden always_up lost_focus
     set line [gets $fd]
     close $fd
     puts "command: $line - $always_up"
@@ -482,7 +492,8 @@ proc do_connect {fd addr port} {
         return
     }
 
-    if {[wm state .] == "normal" && !$is_hidden} {
+    puts "state = [wm state .], is_hidden = $is_hidden lost_focus = $lost_focus"
+    if {[wm state .] == "normal" && !$is_hidden && !$lost_focus} {
         if {[wm overrideredirect .]} {
 
         } else {
