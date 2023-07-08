@@ -39,6 +39,13 @@ In the rest of this document ...
   In Section 4, I will describe some possible ways for CDS to evolve to support more ahead-of-time processing
   of Java applications to improve start-up time.
 
+### 1.2 CDS Improvements over the Years
+
+Here's a list of significant CDS improvements in performance and usability over the years:
+
+- https://bugs.openjdk.org/issues/?filter=43282
+
+
 ## 2. Using CDS in Your Applications
 
 Note: detailed information about using CDS, including the various JVM and jcmd options, can be found here:
