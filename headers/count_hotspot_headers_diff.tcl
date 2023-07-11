@@ -46,6 +46,6 @@ foreach header [array names all_headers] {
 
     set diff [expr $new_count - $old_count]
     if {$diff != 0} {
-        puts [format {%6d %s} $diff $header]
+        puts [format {%6d (%6d -> %6d) %s} $diff $old_count $new_count $header]
     }
 }
