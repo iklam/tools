@@ -1,0 +1,2 @@
+# Only symbols in this file are exported from libfoo.a
+foo_exported
