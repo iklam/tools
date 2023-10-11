@@ -14,6 +14,34 @@ proc make_link {html log} {
     return $log
 }
 
+proc trim_cmdline {line} {
+    set n 0
+    set last_cp1 -1
+    set last_cp2 -1
+    foreach item [split $line " "] {
+        set arr($n) $item
+        if {[string comp "-cp" "$item"] == 0 || [string comp "-jar" "$item"] == 0} {
+            set skip($last_cp1) 1
+            set skip($last_cp2) 1
+            set last_cp1 $n
+            set last_cp2 [expr $n + 1]
+        }
+        incr n
+    }
+
+    set result ""
+    set prefix " "
+    for {set i 0} {$i < $n} {incr i} {
+        if {![info exists skip($i)]} {
+            append result $prefix
+            append result $arr($i)
+            set prefix " "
+        }
+    }
+
+    return $result
+}
+
 proc convert_html {jtr} {
     global logfiles env
     cd ~/tmp/$env(JTREG_DIR)
@@ -54,7 +82,8 @@ proc convert_html {jtr} {
         window.addEventListener("keydown", myKeyPress);
         </script>
     }
-    set pat {(logging std... to) (.*[.]std...)}
+    set stdout_pat {(logging std... to) (.*[.]std...)}
+    set output_pat {(output file:) ([^ ]+)}
     set hserr_pat {(#) (.*log)}
     set num_logs 0
     set jtrdata ""
@@ -89,9 +118,11 @@ proc convert_html {jtr} {
         } elseif {[string first "Command line: \[" $line] == 0 ||
                   [string first "\[COMMAND\]" $line] == 0} {
             incr num_logs
-            set line "<div id=llog$num_logs><a name=log$num_logs><br><hr>\[$num_logs\]</a> $line</div>"
-        } elseif {[string first "logging std" $line] >= 0 && [regexp $pat $line dummy dummy filename]} {
-            set line [fix_link $jtr_data_dir $pat $filename $line]
+            set line "<div id=llog$num_logs><a name=log$num_logs><br><hr>\[$num_logs\]</a> [trim_cmdline $line]</div>"
+        } elseif {[string first "logging std" $line] >= 0 && [regexp $stdout_pat $line dummy dummy filename]} {
+            set line [fix_link $jtr_data_dir $stdout_pat $filename $line]
+        } elseif {[string first "\[output file:" $line] >= 0 && [regexp $output_pat $line dummy dummy filename]} {
+            set line [fix_link $jtr_data_dir $output_pat $filename $line]
         } elseif {[string first "hs_err_pid" $line] >= 0 && [regexp $hserr_pat $line dummy dummy filename]} {
             set line [fix_link $jtr_data_dir $hserr_pat $filename $line]
 

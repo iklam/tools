@@ -41,7 +41,7 @@ proc build_worklists {} {
             set mtstat [file mtime $f.stat]
         }
         set g_reports($f) $mtfile
-        if {$mthtml < $mtfile || $mtstat < $mtfile || [info exists env(UPDATEALL)]} {
+        if {$mthtml < $mtfile || $mtstat < $mtfile || [info exists env(UPDATE_ALL)]} {
             if {[info exists env(VERBOSE)]} {
                 puts "Updating $f"
             }
