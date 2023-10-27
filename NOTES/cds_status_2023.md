@@ -73,14 +73,19 @@ $ perf stat -n -r 40 javac Hello.java
         0.28140 +- 0.00163 seconds time elapsed  ( +-  0.58% )
 ```
 
-If we want to specify JVM options for javac, we could use the syntax like `-J-XX:SharedArchiveFile=javac.jsa`,
+If we want to specify JVM options for javac, we could use the the `-J` option, as in
+
+```
+javac -J-Xshare:off Hello.java
+```
+
 but it's more convenient to directly run its main class, `com.sun.tools.javac.Main`.
 
 So here's our baseline number: when launching with its main class, javac takes about 260ms to compile Hello.java.
 
 ```
 $ perf stat -n -r 40 java com.sun.tools.javac.Main Hello.java
-        0.259218 +- 0.000798 seconds time elapsed  ( +-  0.31% )
+        0.26877 +- 0.00141 seconds time elapsed  ( +-  0.52% )
 ```
 
 Note that this is even faster than using the "javac" program. This is due to the difference
@@ -947,3 +952,6 @@ TODO
 ## 4. Future Directions
 
 
+## 5. Resources
+
+- [YouTube: Java's Startup Booster: CDS](https://www.youtube.com/watch?v=vvlQv1Dh-HU) by [Billy Korando](https://twitter.com/BillyKorando)

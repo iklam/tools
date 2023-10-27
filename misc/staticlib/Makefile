@@ -4,8 +4,8 @@
 all: app
 
 libfoo.a: foo1.cpp foo2.cpp Makefile
-	gcc -c foo1.cpp
-	gcc -c foo2.cpp
+	gcc -g -c foo1.cpp
+	gcc -g -c foo2.cpp
 	ld --relocatable -o foo-combined.o foo1.o foo2.o
 	objcopy --keep-global-symbols=symbols-unix foo-combined.o foo-combined-stripped.o
 	rm -f libfoo.a
@@ -13,9 +13,9 @@ libfoo.a: foo1.cpp foo2.cpp Makefile
 	nm libfoo.a | c++filt
 
 app: app.cpp libfoo.a Makefile
-	gcc -c app.cpp
+	gcc -g -c app.cpp
 	nm app.o | c++filt
-	gcc -o app app.o  -L . -lfoo
+	gcc -g -o app app.o  -L . -lfoo
 
 clean:
 	rm -f *.o *~ *.a

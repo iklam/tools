@@ -83,7 +83,7 @@ proc convert_html {jtr} {
         </script>
     }
     set stdout_pat {(logging std... to) (.*[.]std...)}
-    set output_pat {(output file:) ([^ ]+)}
+    set output_pat {(output file:) ([^ ]+) [0-9]* bytes}
     set hserr_pat {(#) (.*log)}
     set num_logs 0
     set jtrdata ""

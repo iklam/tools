@@ -136,6 +136,12 @@ function wi10 () {
 
 alias wi=wi10
 
+alias countinc='tclsh ${IOIGIT}/headers/count_hotspot_headers.tcl'
+alias incx='(if test ! -d hotspot/variant-server/libjvm/objs; then cdd0; fi; countinc)'
+alias incxx='incx | sort -n'
+alias incxx4='incxx | tail -4'
+
+
 #======================================================================
 # ls color settings
 #======================================================================

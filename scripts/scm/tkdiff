@@ -357,7 +357,7 @@ catch {tk scaling [expr {100.0 / 72}]}
 # Exit with proper code
 ###############################################################################
 proc do-exit {{returncode {}}} {
-    puts $returncode
+    catch {puts $returncode}
     debug-info "do-exit ($returncode)"
     global g exiting
 
@@ -402,7 +402,7 @@ proc fatal-error {msg} {
         tk_messageBox -title "Error" -icon error -type ok -message $msg
         do-exit 2
     } else {
-        puts stderr $msg
+        catch {puts stderr $msg}
         del-tmp
         do-exit 2
     }

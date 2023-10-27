@@ -95,14 +95,14 @@ proc get_title {b} {
 }
 
 set verbose 0
-set activeonly 0
+set activeonly 1
 
 foreach arg $argv {
     if {"$arg" == "-v"} {
         set verbose 1
     }
-    if {"$arg" == "-c"} {
-        set activeonly 1
+    if {"$arg" == "-a" || "$arg" == "-all"} {
+        set activeonly 0
     }
 }
 
@@ -117,7 +117,7 @@ foreach item [lsort -command compare_by_timestamp [array names seen]] {
         set c " *"
     } else {
         set c "  "
-        if {!$activeonly} {
+        if {$activeonly} {
             continue
         }
     }

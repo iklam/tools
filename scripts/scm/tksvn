@@ -393,8 +393,20 @@ proc translate_version {version} {
     return $version
 }
 
+proc git_version_alias {v} {
+    if {"$v" == "parent"} {
+        foreach line [split [exec git branch -vv] \n] {
+            if {[regexp {^[*].*\[([^\n:\]]+)} $line dummy parent]} {
+                puts "parent branch = $parent"
+                return $parent
+            }
+        }
+    }
+    return $v
+}
+
 proc find_files_scm_mode {} {
-    global argv version version2 repo env
+    global argv version version2 repo env subpath
 
     # Try to add -r to be helpful (and might confuse ya!)
     if {[llength $argv] <= 2 && [lindex $argv 0] != "-r"} {
@@ -407,6 +419,10 @@ proc find_files_scm_mode {} {
     if {[lindex $argv 0] == "-r"} {
         set version  [resolve [lindex $argv 1]]
         set version2 [resolve [lindex $argv 2]]
+        set subpath  [resolve [lindex $argv 3]]
+        if {"$subpath" == "."} {
+            set subpath [pwd]
+        }
 
         set version  [translate_version $version]
         set version2 [translate_version $version2]
@@ -423,6 +439,7 @@ proc find_files_scm_mode {} {
             puts "tksvn -r $version $version2"
         }
     }
+
     set d [pwd]
     set hg 0
     set svn 0
@@ -471,9 +488,18 @@ proc find_files_scm_mode {} {
     } elseif {$svn} {
         set cmd svn
     } elseif {$git} {
+        set version [git_version_alias $version]
+        set version2 [git_version_alias $version2]
+
         cd $d
         set cmd git
+        if {[string first [pwd] $subpath] == 0} {
+            set subpath [string range $subpath [expr [string len [pwd]] + 1] end]
+        }
     }
+
+    puts $subpath
+
     set files [find_scm_files $cmd]
 
     return $files
@@ -651,7 +677,7 @@ proc compare_files {a b} {
 
 set therepo ""
 proc find_files_in_repo0 {cmd} {
-    global version version2 therepo oldname file_added file_deleted
+    global version version2 therepo oldname file_added file_deleted subpath
 
     catch {  unset oldname }
     catch {  unset file_added }
@@ -697,7 +723,7 @@ proc find_files_in_repo0 {cmd} {
                 set fd [open "|hg diff -r $version -r $version2"]
             }
         } elseif {$cmd == "git"} {
-            set fd [open "|git diff $version $version2"]
+            set fd [open "|git diff $version $version2 $subpath"]
         } else {
             puts "Not supported: $cmd"
             exit 1

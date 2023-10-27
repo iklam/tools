@@ -25,21 +25,43 @@ puts ""
 puts "$url"
 puts ""
 
+# -n means don't change the clipboard
 # -t means copy the bug title into the clipboard
-# otherwise copy the URL.
-if {[regexp {[-]t} $argv]} {
+# otherwise copy the URL into the clipboard
+if {"$argv" == "-t" || [regexp {[-]t } $argv]} {
     set copy_title 1
 } else {
     set copy_title 0
-    set fd [open "|xclip -i" w+]
-    puts -nonewline $fd $url
-    close $fd
+    if {![regexp {[-]n } $argv]} {
+        set fd [open "|xclip -i" w+]
+        puts -nonewline $fd $url
+        close $fd
+    }
 }
 
 flush stdout
 
 if {[catch {
     set data [exec wget -O - -q $url]
+
+    set extra {}
+    if {[regexp {issue_summary_assignee_([^_\"]+)} $data dummy user]} {
+        append extra "Assignee:\n$user\n"
+    }
+    if {[regexp {issue_summary_reporter_([^_\"]+)} $data dummy user]} {
+        append extra "Reporter:\n$user\n"
+    }
+
+    set d $data
+    regsub -all "<dt>" $d "" d
+    regsub -all "</dt>" $d "" d
+
+    foreach tag {Created Updated Resolved} {
+        if {[regexp "$tag:\[^<\]*<\[^>\]*title=\"(\[^>\]*)\"" $d dummy found]} {
+            append extra "$tag:\n$found\n"
+        }
+    }
+
     if {[regexp {<title>([^<]+)</title>} $data dummy  title]} {
         regsub { - Java Bug System} $title "" title
         regsub {^[^\]]+\] } $title "" title
@@ -49,6 +71,7 @@ if {[catch {
             set fd [open "|xclip -i" w+]
             puts -nonewline $fd $t
             close $fd
+            set title $t
         }
     }
 
@@ -58,9 +81,12 @@ if {[catch {
     regsub .*Type: $data Type: data
     #regsub -all "\[\r\n\t \]+" $data " " data
 
+    append data $extra
+    set data [string trim $data]
+
     set sep ""
     foreach n [split $data \n] {
-        if {[regexp : $n]} {
+        if {[regexp {:$} $n]} {
             puts -nonewline "$sep    [format %-20s [string trim $n]]"
             set sep \n
         } else {
@@ -74,4 +100,11 @@ if {[catch {
     puts "Cannot get url $err"
 }
 
+if {$copy_title && [info exists title]} {
+    puts ""
+    puts =======================================================================v=======v
+    puts ---------1---------2---------3---------4---------5---------6---------7-|xxxxxxx8
+    puts $title
+    puts ""
+}
 
