@@ -95,6 +95,8 @@ proc write_report_header {fd outfile} {
     catch {unset ffd}
 
     puts $fd {
+        <html>
+        <link href="/favicon3.ico" rel="icon" type="image/x-icon" />
         <head>
         <style>
         table {

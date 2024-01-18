@@ -50,7 +50,7 @@ if {$tm > $tg} {
 
 proc make_gui {} {
     global hlist view_mode wrapStyle nowrapStyle hide_vm_errors
-    global distcc_order distcc_active distcc_selected distcc_btn
+    global distcc_order distcc_active distcc_total distcc_selected distcc_btn
     package require Tix
     wm protocol . WM_DELETE_WINDOW exit
     wm geometry . 480x900-0+195
@@ -81,6 +81,7 @@ proc make_gui {} {
 	hlist.columns 4
     }]
     pack $sl -expand yes -fill both
+    frame $t.botrow0
     frame $t.botrow1
     frame $t.botrow2
 
@@ -88,13 +89,24 @@ proc make_gui {} {
 
     pack $t.botrow2 -side bottom -fill x
     pack $t.botrow1 -side bottom -fill x
+    pack $t.botrow0 -side bottom -fill x
     pack $t.switch -in $t.botrow2
 
+    set n 0
     foreach host $distcc_order {
+        incr n
+        if {$n > 3} {
+            set frame $t.botrow1
+        } else {
+            set frame $t.botrow0
+        }
         set distcc_selected($host) 1
-        checkbutton $t.dist_$host -text "$host" -variable distcc_selected($host) -command update_available_hosts
-        pack $t.dist_$host -in $t.botrow1 -side left
+        set cbtext $host
+        regsub ioi $cbtext "" cbtext
+        checkbutton $t.dist_$host -text $cbtext -variable distcc_selected($host) -command update_available_hosts
+        pack $t.dist_$host -in $frame -side left
         set distcc_active($host) 0
+        set distcc_total($host) 0
         set distcc_btn($host) $t.dist_$host 
     }
 
@@ -337,10 +349,22 @@ proc update_available_hosts {} {
 }
 
 proc update_hosts_stats {} {
-    global distcc_order distcc_active distcc_btn
+    global distcc_order distcc_active distcc_total distcc_history distcc_btn
 
     foreach host $distcc_order {
-        $distcc_btn($host) config -text "$host ($distcc_active($host))"
+        set perc ""
+        catch {
+            set n [array size distcc_history]
+            if {$n > 0} {
+                set perc ",[expr int(100.0 * $distcc_total($host) / $n)]%"
+            }
+            if {$perc == ",0%"} {
+                set perc ""
+            }
+        }
+        set cbtext "$host ($distcc_active($host),$distcc_total($host)$perc)"
+        regsub ioi $cbtext "" cbtext
+        $distcc_btn($host) config -text $cbtext
     }
 }
 
@@ -415,6 +439,7 @@ proc refresh {{mode {}}} {
     refresh_${view_mode} $mode
 }
 
+set stack2file {}
 proc refresh_make {{mode {}}} {
     global hlist stack2file wrapStyle nowrapStyle group_errors
     if {![info exists hlist]} {
@@ -438,11 +463,19 @@ proc refresh_make {{mode {}}} {
 
     set stack2file {}
     set frameid 0
+    set n 0
     while {![eof $fd]} {
         set line [gets $fd]
+        
         if {[regexp {([^/]+[.].pp:[0-9]+:[0-9]+: error:.*)} $line tail] ||
             [regexp {([^/]+[.].pp:[0-9]+:[0-9]+:.*required from here*)} $line tail] ||
             [regexp {([^/]+[.].pp:[0-9]+:[0-9]+: note: in expansion of macro 'assert'.*)} $line tail]} {
+
+            incr n
+            if {$n > 999991} {
+                puts DONE
+                break
+            }
 
             if {$group_errors} {
                 if {[regexp {(.*pp):} $line dummy file] && ![info exists seen($file)]} {
@@ -473,12 +506,12 @@ proc refresh_make {{mode {}}} {
                     bind $w <ButtonRelease-1> "do_select_make $frameid"
                 }
                 incr frameid
+                set line "$line "
                 lappend stack2file $line
             }
         }
     }
     close $fd
-
     if {$frameid == 0} {
         refresh_compile
     }
@@ -553,9 +586,11 @@ proc refresh_gdb {{mode {}}} {
     }
 }
 
+set distcc_finished 0
+set lasttime 0
 proc refresh_compile {{mode {}}} {
-    global hlist distcc_order distcc_active distcc_selected
-
+    global hlist distcc_order distcc_active distcc_total distcc_selected distcc_history distcc_finished lasttime
+    set now [clock seconds]
     $hlist delete all
 
     set fd [open "|ps -ef"]
@@ -565,6 +600,7 @@ proc refresh_compile {{mode {}}} {
         if {[regexp {([^ ]+[.]o) } $line dummy obj]} {
             if {[regexp {([^ ]+[.]cpp) } $line dummy cpp]} {
                 set found($obj) $cpp
+                set lasttime $now
             }
             if {[regexp {ssh ([^ ]+)} $line dummy host]} {
                 set remote($obj) $host
@@ -589,19 +625,38 @@ proc refresh_compile {{mode {}}} {
         set distcc_active($host) 0
     }
 
+    if {$now - $lasttime > 5} {
+        set distcc_finished 0
+        catch {unset distcc_history}
+        foreach host [array names distcc_total] {
+            set distcc_total($host) 0
+        }
+    }
+
     set n 1
     set m 1
     set left 1
+    set objs 0
     foreach file [lsort -dict $list] {
+        if {"$file" != "... linking"} {
+            incr objs
+        }
+
         set host ""
         if {[info exists h($file)]} {
             set host $h($file)
         }
 
         if {[info exists distcc_selected($host)]} {
-            incr distcc_active($host)
+            set who $host
         } else {
-            incr distcc_active(localhost)
+            set who localhost
+        }
+
+        incr distcc_active($who)
+        if {![info exists distcc_history($who,$file)]} {
+            set distcc_history($who,$file) 1
+            incr distcc_total($who) 1
         }
 
         set target [format %-10s%s $host $file]
@@ -617,12 +672,16 @@ proc refresh_compile {{mode {}}} {
         }
         incr m
     }
-
-    if {$n > 0} {
+    puts $objs
+    if {$n > 1} {
         schedule_refresh 2000
     } else {
         schedule_refresh 5000
     }
+    if {$objs == 0} {
+        set distcc_finished 1
+    }
+
     update_hosts_stats
 }
 

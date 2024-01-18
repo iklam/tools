@@ -4,9 +4,11 @@ set cur_desktop -1
 set always_show_done 0
 
 proc update {args} {
-    global cur_desktop always_show_done
-    after 300 update
-
+    #puts update
+    global cur_desktop always_show_done last_used
+    if {"$args" != "-force"} {
+        after 300 update
+    }
     set data [exec xprop -root]
     set c $cur_desktop
     regexp {_NET_CURRENT_DESKTOP.CARDINAL. = ([0-9]+)} $data dummy c
@@ -16,20 +18,30 @@ proc update {args} {
 
     set cur_desktop $c
     foreach w [winfo children .] {
-        if {![regexp desktop $w]} {
+        if {![regexp desktop $w] && "$w" != ".bottom"} {
             destroy $w
         }
+    }
+    foreach w [winfo children .bottom] {
+        destroy $w
     }
     set list {}
     set fd [open "|xwininfo -root -tree"]
     while {![eof $fd]} {
         set line [gets $fd]
-        if {[regexp {Gnome-terminal} $line]} {
+        if {[regexp {(Gnome-terminal)|("emacs@ioilinux2")|(the_emacs)} $line]} {
+            #puts $line
             if {[regexp {(0x[0-9a-f]+).*[+]([0-9]+)[+]} $line dummy id xpos]} {
                 set xpos [format %08x $xpos]
                 set data [exec xprop -id $id]
                 if {[regexp {_NET_WM_DESKTOP.CARDINAL. = ([0-9]+)} $data dummy desktop] &&
-                    [regexp {WM_ICON_NAME.STRING. = \"([^\"]+)\"} $data dummy name]} {
+                    [regexp {_NET_WM_ICON_NAME.UTF8_STRING. = \"([^\"]+)\"} $data dummy name]} {
+                    if {"$name" == "the_emacs"} {
+                        set name EM1
+                    } elseif {"$name" == "emacs@ioilinux2"} {
+                        set name EM2
+                    }
+
                     if {$desktop == $cur_desktop || $desktop == 4294967295} {
                         lappend list $name==$xpos==$id
                     }
@@ -41,6 +53,10 @@ proc update {args} {
             set always_show_done 1
         }
     }
+    close $fd
+
+    #puts $list
+    #puts [array names last_used]
 
     foreach item [lsort $list] {
         if {[regexp {^(.*)==[0-9a-f]+==(0x[0-9a-f]+)$} $item dummy name id]} {
@@ -49,20 +65,61 @@ proc update {args} {
             pack $b -side left
             bind $b <Control-Enter> "cover $id"
             bind $b <Leave> "uncover"
+
+            if {[info exists last_used($id)]} {
+                set b [button .bottom.$id -text $name -command "activate $id"]
+                pack $b -side left
+                bind $b <Control-Enter> "cover $id"
+                bind $b <Leave> "uncover"
+            }
+
         }
     }
-    wm geometry . +0-0
+    wm geometry . +0+25
+    wm geometry .bottom +0-0
+
+    if {[winfo children .bottom] == {}} {
+        wm withdraw .bottom
+    } else {
+        after 200 {wm deiconify .bottom}
+    }
 }
 
 proc activate {id} {
-    global show_cover_after
+    global show_cover_after last_used
     catch {
         exec xdotool windowactivate $id
     }
     catch {
         destroy .cover
     }
+    set old [lsort [array names last_used]]
+    set last_used($id) [clock seconds]
     set show_cover_after -1
+
+    set max 5
+    set names [lsort [array names last_used]]
+    if {[llength $names] > $max} {
+        set times {}
+        foreach i $names {
+            lappend times $last_used($i)
+        }
+        set times [lsort -integer -decreasing $times]
+        puts $times
+        set out [lindex $times $max]
+        foreach i $names {
+            if {$last_used($i) <= $out} {
+                unset last_used($i)
+            }
+        }
+    }
+
+    set new [lsort [array names last_used]]
+
+    #puts "$old == $new"
+    if {$new != $old} {
+        update -force
+    }
 }
 
 set show_cover_after -1
@@ -134,6 +191,10 @@ proc make_ui {} {
     pack $r  -side left
     pack $b1 -side left
     pack $b2 -side left
+
+    toplevel .bottom
+    wm overrideredirect .bottom true
+    wm geometry .bottom +0-0
 }
 
 make_ui

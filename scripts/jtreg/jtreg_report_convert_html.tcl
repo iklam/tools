@@ -265,7 +265,7 @@ proc fix_link {jtr_data_dir pat filename line} {
         regsub {^[.]/} $file "" file
 
         set size [file size $file]
-        set link /~iklam/jtreg/$env(JTREG_DIR)/$file
+        set link /$env(JTREG_DIR)/$file
         regsub -all \# $link %23 link
         set file "<a href=$link>$filename</a> [format {%7d bytes} $size]"
         regsub $pat $line "\\1 $file" line

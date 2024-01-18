@@ -83,7 +83,7 @@ proc try_open_file_and_exit {file} {
         }
     }
 
-    puts $lineno=$file=[pwd]=[file exists $file]
+    #puts $lineno=$file=[pwd]=[file exists $file]
 
     if {[file exists $file] || !$find} {
         if {$lineno != ""} {
