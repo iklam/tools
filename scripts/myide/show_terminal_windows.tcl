@@ -1,7 +1,11 @@
-# Raise all the windows of the current repo
+# Raise all the terminals of the current repo
 #
 # This can be activated by the "wins" alias in ./bashrc.sh
-
+#
+# alias wins='tclsh $IOIGIT/scripts/myide/show_terminal_windows.tcl $GNOME_TERNIMAL_NAME'
+#
+# wins    = show all terminals of the current repo
+# wins -h = show all terminals of the current repo; and hide all other terminals
 source [file dirname [info script]]/../lib/common.tcl
 
 set hide_others [pop_arg h]
@@ -14,7 +18,8 @@ if {"$title" == ""} {
         set data [string trim [exec cat /tmp/autoraise-active-term]]
     }
     #puts $data
-    if {[regexp {(0x[0-9a-f]+).*ioilinux (.*)} $data dummy active title]} {
+    set hostname ioilinux2
+    if {[regexp "(0x\[0-9a-f\]+).*$hostname (.*)" $data dummy active title]} {
         puts "found last active win $active -- $title"
         if 1 {
             # ioi -- wh's wrong with doing this???
@@ -41,6 +46,7 @@ if {[regexp {0x[0-9a-f]+$} $active active]} {
         set pattern "( $title)|(bufie)"
         if {[regexp {^(0x[0-9a-f]+) } $line dummy id]} {
             if {[regexp $pattern $line]} {
+                puts $line
                 exec wmctrl -i -a $id
             } elseif {$hide_others} {
                 set pid [lindex $line 2]

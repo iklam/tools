@@ -216,3 +216,113 @@ function oldjavac0 () {
 function oldjavac1 () {
     jjrun "$@" --- -Xlog:cds=debug -XX:+ArchiveInvokeDynamic -Xshare:dump -XX:SharedArchiveFile=javac.jsa -XX:SharedClassListFile=javac.classlist
 }
+
+#==================================================================================
+# cdsrun - a uniform way for running handly CDS test cases (HelloWorld, javac, etc)
+#=================================================================================
+function cdsrun () {
+    local testname=$1
+    local testcp=$2
+    local testmain=$3
+    local testmode=$4
+
+    shift; shift; shift; shift;
+
+    local hasgdb=0
+    local hasperf=0
+    local perfrepeat=
+    local args0=
+    local args1=
+    local args2=
+    local i
+    local whicharg=0
+
+    for i in "$@"; do
+        if test "$i" = "--"; then
+            whicharg=$(expr $whicharg + 1)
+        else
+            if test "$whicharg" = "0"; then
+                if [[ "$arg0" = "" ]] && [[ $hasgdb = "0" ]] && [[ "$i" = "-gdb" ]]; then
+                    hasgdb=1
+                elif [[ "$arg0" = "" ]] && [[ $hasperf = "0" ]] && [[ "$i" = "-perf" ]]; then
+                    hasperf=1
+                elif [[ "$arg0" = "" ]] && [[ $hasperf = "1" ]] && [[ "$perfrepeat" = "" ]]; then
+                    # TODO: check for error
+                    perfrepeat=$i
+                else
+                    args0="$args0 $i"
+                fi
+            elif test "$whicharg" = "1"; then
+                args1="$args1 $i"
+            else
+                args2="$args2 $i"
+            fi
+        fi
+    done
+
+
+    if test $hasgdb = 1; then
+        if [[ "$TESTBED/bin/java" = "$LAUNCHER" ]]; then
+            local cmd="gdb --args $LAUNCHER $args0"
+        else
+            local cmd="$LAUNCHER -gdb $args0"
+        fi
+    elif test $hasperf = 1; then
+        if [[ "$TESTBED/bin/java" = "$LAUNCHER" ]]; then
+            local cmd="perf stat -r $perfrepeat $LAUNCHER $args0"
+        else
+            local cmd="$LAUNCHER -gdb $args0"
+        fi
+    else
+        local cmd="$LAUNCHER $args0"
+    fi
+
+    if test "$testcp" != ""; then
+        cmd="$cmd -cp $testcp"
+    fi
+
+    case "$testmode" in
+        none)
+            # none = run the app as is, without any app-specific CDS optimizations
+            true
+            ;;
+        old0)
+            # old0 = old workflow: dump classlist for static archive
+            cmd="$cmd -Xshare:off -XX:DumpLoadedClassList=$testname.classlist"
+            ;;
+        old1)
+            # old1 = old workflow: dump static archive
+            cmd="$cmd -Xshare:dump -Xlog:cds -XX:SharedArchiveFile=$testname.jsa -XX:SharedClassListFile=$testname.classlist"
+            ;;
+        old2)
+            # old1 = old workflow: run with static archive
+            cmd="$cmd -Xshare:on -XX:SharedArchiveFile=$testname.jsa"
+            ;;
+    esac
+
+    cmd="$cmd $args1 $testmain $args2"
+
+    echo $cmd >&2
+    eval $cmd
+}
+
+
+function cdsrun-define () {
+    local testname=$1
+    local testcp=$2
+    local testmain=$3
+
+    local foo="cdsrun \"$1\" \"$2\" \"$3\""
+
+    alias ${testname}-n="$foo none"
+    alias ${testname}-o0="$foo old0"
+    alias ${testname}-o1="$foo old1"
+    alias ${testname}-o2="$foo old2"
+
+    #alias ${testname}-old0="$foo old0"
+    #alias ${testname}-old1="$foo old1"
+}
+
+cdsrun-define vv "" --version
+cdsrun-define hw ~/tmp/HelloWorld.jar HelloWorld
+cdsrun-define jc "" "com.sun.tools.javac.Main ~/tmp/HelloWorld.java"
