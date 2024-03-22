@@ -836,7 +836,7 @@ proc doit {file} {
 
     if {[catch {
         if {[info exists version]} {
-            if {[string comp "$v2" ""] == 0} {
+            if {[string comp "$v2" ""] == 0 || [file exists "$v2"]} {
                 do-launch -r $v1 [list $file]
             } else {
                 do-launch -r $v1 -r $v2 [list $file]

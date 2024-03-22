@@ -75,8 +75,8 @@ proc update {args} {
 
         }
     }
-    wm geometry . +0+25
-    wm geometry .bottom +0-0
+    wm geometry . +43+25
+    wm geometry .bottom +43-0
 
     if {[winfo children .bottom] == {}} {
         wm withdraw .bottom

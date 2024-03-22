@@ -24,6 +24,12 @@ alias gitbranches='tclsh ${IOIGIT}/scripts/scm/gitbranches.tcl'
 alias gitblame='tclsh ${IOIGIT}/scripts/scm/gitblame.tcl'
 alias gitweb='tclsh ${IOIGIT}/scripts/scm/gitweb.tcl'
 
+function gitrevert () {
+    git show $1:$2 > /tmp/gitrevert.tmp || exit 1
+    mv /tmp/gitrevert.tmp $2
+    echo updated $2 to version $1
+}
+
 # Used for diffing two diff files
 alias filterdiff='tclsh ${IOIGIT}/scripts/scm/filter_diff.tcl'
 
@@ -281,6 +287,9 @@ function cdsrun () {
         cmd="$cmd -cp $testcp"
     fi
 
+    local NEW_WF_ARGS="-XX:+PreloadSharedClasses -XX:+ArchiveInvokeDynamic"
+    local OLD_WF_ARGS="-XX:+PreloadSharedClasses -XX:+ArchiveDynamicProxies -XX:+ArchiveFieldReferences -XX:+ArchiveInvokeDynamic -XX:+ArchiveReflectionData"
+
     case "$testmode" in
         none)
             # none = run the app as is, without any app-specific CDS optimizations
@@ -298,6 +307,29 @@ function cdsrun () {
             # old1 = old workflow: run with static archive
             cmd="$cmd -Xshare:on -XX:SharedArchiveFile=$testname.jsa"
             ;;
+        premain1)
+            # Premain 1 = old workflow with Premain optimizations: dump static archive
+            cmd="$cmd -Xshare:dump -Xlog:cds $OLD_WF_ARGS -XX:SharedArchiveFile=$testname.p.jsa -XX:SharedClassListFile=$testname.classlist"
+            ;;
+        premain2)
+            # Premain 2 = old workflow with Premain optimizations: run with static archive
+            cmd="$cmd -Xshare:on -XX:SharedArchiveFile=$testname.p.jsa"
+            ;;
+        new0)
+            # new0 = new workflow: dump preimage
+            rm -vf $testname.cds
+            rm -vf $testname.cds.preimage
+            cmd="$cmd -Xlog:cds ${NEW_WF_ARGS} -XX:+UnlockDiagnosticVMOptions"
+            cmd="$cmd -XX:+CDSManualFinalImage -XX:CacheDataStore=$testname.cds"
+            ;;
+        new1)
+            # new1 = new workflow: dump final image
+            cmd="$cmd -Xlog:cds ${NEW_WF_ARGS} -XX:CDSPreimage=$testname.cds.preimage -XX:CacheDataStore=$testname.cds"
+            ;;
+        new2)
+            # new2 = new workflow: use final image
+            cmd="$cmd -Xlog:cds ${NEW_WF_ARGS} -XX:CacheDataStore=$testname.cds"
+            ;;
     esac
 
     cmd="$cmd $args1 $testmain $args2"
@@ -312,17 +344,26 @@ function cdsrun-define () {
     local testcp=$2
     local testmain=$3
 
-    local foo="cdsrun \"$1\" \"$2\" \"$3\""
+    local run="cdsrun \"$1\" \"$2\" \"$3\""
 
-    alias ${testname}-n="$foo none"
-    alias ${testname}-o0="$foo old0"
-    alias ${testname}-o1="$foo old1"
-    alias ${testname}-o2="$foo old2"
+    alias ${testname}0="$run none"
 
-    #alias ${testname}-old0="$foo old0"
-    #alias ${testname}-old1="$foo old1"
+    alias ${testname}o0="$run old0"
+    alias ${testname}o1="$run old1"
+    alias ${testname}o2="$run old2"
+
+    alias ${testname}p0="$run old0"
+    alias ${testname}p1="$run premain1"
+    alias ${testname}p2="$run premain2"
+
+    alias ${testname}n0="$run new0"
+    alias ${testname}n1="$run new1"
+    alias ${testname}n01="$run new0 && $run new1"
+    alias ${testname}n2="$run new2"
 }
 
 cdsrun-define vv "" --version
 cdsrun-define hw ~/tmp/HelloWorld.jar HelloWorld
-cdsrun-define jc "" "com.sun.tools.javac.Main ~/tmp/HelloWorld.java"
+cdsrun-define st ~/tmp/StreamTest.jar StreamTest
+cdsrun-define pk ~/tmp/PkgTest.jar test.pkg.PkgTest
+cdsrun-define jc "" "com.sun.tools.javac.Main -d . ~/tmp/HelloWorld.java"

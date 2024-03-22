@@ -40,6 +40,8 @@ proc update_title {} {
     wm title . $title
 }
 
+set logfd [open ~/tmp/$env(JTREG_DIR)/rawlog.txt w+]
+
 proc print_compilation_error {file} {
     global errors_len env
     set max_err 20
@@ -127,7 +129,7 @@ proc update_report_callback {handle output} {
 proc doit {args} {
     global start numpassed numfailed numerror numfinish has_started start_test_time end_test_time running
     global failures last_test test_elapsed last_report_time has_parsed_java_files
-    global updating_report final_report env totalFail
+    global updating_report final_report env totalFail logfd
 
     if {[info exists final_report]} {
         return
@@ -148,6 +150,8 @@ proc doit {args} {
         update_report 1
     }
     set line [gets stdin]
+    puts $logfd $line
+    flush $logfd
     set time [clock seconds]
     if {![info exists test_elapsed]} {
         set test_elapsed "     "
