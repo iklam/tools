@@ -1,5 +1,7 @@
 #! /bin/wish
 # Allow the user to configure whether to automatically emacs or tkdiff is automatically raised
+#
+# This also runs the server for ./distcc.tcl and ../jtreg/jtreg_dist.tcl (at port 9989)
 
 set scripts_root [file dirname [info script]]/..
 source $scripts_root/lib/xraise.tcl
@@ -123,6 +125,8 @@ proc exec_buf {} {
     }
 }
 
+# ~/.distcc.config.tcl
+#
 # This file should have something like this. The number is how many
 # concurrent jobs should be executed on that host
 #
@@ -136,7 +140,7 @@ proc exec_buf {} {
 # set distcc_order {localhost remotehost1 remotehost2}
 
 proc distcc_init {} {
-    global distcc_selected distcc_order distcc_cpus
+    global distcc_selected distcc_order distcc_cpus distcc_active
 
     uplevel #0 source ~/.distcc.config.tcl
  
@@ -144,11 +148,27 @@ proc distcc_init {} {
         set distcc_selected($host) 1
         set distcc_active($host) 0
     }
-    socket -server do_distcc_connect 9989
+    socket -server handle_distcc_request 9989
 }
 
-proc do_distcc_connect {fd addr port} {
-    global distcc_cpus distcc_order distcc_active distcc_selected
+# We have more concurrent compiler processes than available nodes. Put these in an FIFO queue
+set waiting_distcc_fds {}
+
+# addr and port are ignored
+proc handle_distcc_request {fd addr port} {
+    global waiting_distcc_fds distcc_cpuneed distcc_cmdline
+
+    # A value of 100 means this client needs 1 CPU
+    set distcc_cpuneed($fd) [gets $fd]
+    set distcc_cmdline($fd) [gets $fd]
+    
+    if {![try_satisfy_distcc_request $fd]} {
+        lappend waiting_distcc_fds $fd
+    }
+}
+
+proc try_satisfy_distcc_request {fd} {
+    global distcc_cpus distcc_order distcc_active distcc_selected distcc_cpuneed distcc_host_slot_used distcc_fd_to_slot
 
     set hosts {}
     foreach host $distcc_order {
@@ -163,54 +183,86 @@ proc do_distcc_connect {fd addr port} {
         set distcc_selected($host) 1
     }
 
-    # Find the host with the lowest usage
+    # Find the host with the lowest load
     set found {}
-    set maxusage 99999999.0
+    set lowest_load 99999999.0
     foreach host $hosts {
-        set usage 1.0
-        catch {
-            set usage [expr $distcc_active($host).0 / $distcc_cpus($host).0]
+        if {$distcc_active($host) >= $distcc_cpus($host) * 100} {
+            continue
         }
-        #puts $host=$usage,max=$maxusage
-        if {$maxusage > $usage} {
-            set maxusage $usage
+
+        set load 1.0
+        catch {
+            set load [expr $distcc_active($host).0 / $distcc_cpus($host).0]
+        }
+        #puts $host=$distcc_active($host)=$load,max=$lowest_load
+        if {$lowest_load > $load} {
+            set lowest_load $load
             set found $host
         }
     }
-    #puts found=$found
 
-    # Sanity -- if we can't find a host yet, pick the one who has lower number
-    # of tasks over its number of cores.
-    if {$found == {}} {
-        set min_over 10000000000
-        foreach host $hosts {
-            set over [expr $distcc_active($host) - $distcc_cpus($host)]
-            if {$over < $min_over} {
-                set found $host
-                set min_over $over
-            }
+    set host $found
+
+    if {$host == {}} {
+        # Give up for now. Retry later when some jobs have finished
+        return 0
+    }
+
+    # Each client is given a logical "slot" on a given host. This allows
+    # clients to create directories like /tmp/$host.$slot/ to avoid writing
+    # over each other's files. This is used by jtreg_dist.tcl
+    for {set slot 0} {1} {incr slot} {
+        if {![info exists distcc_host_slot_used($host,$slot)]} {
+            set distcc_host_slot_used($host,$slot) 1
+            set distcc_fd_to_slot($fd) $slot
+            #puts ADD-$host-$slot
+            break
         }
     }
 
-    puts $fd $found
+    puts $fd $host
+    puts $fd $slot
     flush $fd
-    incr distcc_active($found)
-    fileevent $fd readable [list do_distcc_fileevent $fd $found]
+    incr distcc_active($host) $distcc_cpuneed($fd)
+    fileevent $fd readable [list do_distcc_fileevent $fd $host]
 
     #parray distcc_active
     #update_hosts_stats
+
+    return 1
 }
 
+# fd is a client that has already been scheduled onto the host. We
+# get called whenever we get an incomming message on fd, or when fd
+# is EOF. The latter is more likely (the client has terminated)
 proc do_distcc_fileevent {fd host} {
-    global distcc_active
+    global distcc_active waiting_distcc_fds distcc_cpuneed distcc_host_slot_used distcc_fd_to_slot
+    global distcc_cmdline
 
     catch {
         gets $fd
     }
     if {[eof $fd]} {
-        incr distcc_active($host) -1
+        incr distcc_active($host) -$distcc_cpuneed($fd)
+        unset distcc_cpuneed($fd)
+        unset distcc_cmdline($fd)
+        # Free the slot, so it can be reused by future clients
+        set slot $distcc_fd_to_slot($fd)
+        #puts DELETE-$host-$slot
+        unset distcc_host_slot_used($host,$slot)
+        #puts OK
+        unset distcc_fd_to_slot($fd)
         catch {
             close $fd
+        }
+        if {[llength $waiting_distcc_fds] > 0} {
+            # Dispatch the next job
+            set fd [lindex $waiting_distcc_fds 0]
+            if {[try_satisfy_distcc_request $fd]} {
+                #puts "redispatch $fd"
+                set waiting_distcc_fds [lrange $waiting_distcc_fds 1 end]
+            }
         }
     } else {
         fileevent $fd readable [list do_distcc_fileevent $fd $host]

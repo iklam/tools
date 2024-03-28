@@ -28,6 +28,7 @@ set has_parsed_java_files 0
 
 set errors_len 0
 set totalFail 0
+set totalError 0
 proc update_title {} {
     global start totalFail env
     set time [clock seconds]    
@@ -129,7 +130,7 @@ proc update_report_callback {handle output} {
 proc doit {args} {
     global start numpassed numfailed numerror numfinish has_started start_test_time end_test_time running
     global failures last_test test_elapsed last_report_time has_parsed_java_files
-    global updating_report final_report env totalFail logfd
+    global updating_report final_report env totalFail logfd totalError
 
     if {[info exists final_report]} {
         return
@@ -191,6 +192,12 @@ proc doit {args} {
         incr numfailed
         set line "**FAIL $last_test"
         incr totalFail 1
+    } elseif {[regexp {^Error[.]} $line]} {
+        set line "$last_test\n    $line"
+        set failures($line) 1
+        incr numerror
+        set line "**ERR  $last_test"
+        incr totalError 1
     } elseif {[regexp {^Test results: } $line]} {
         set test_elapsed [clock format [expr $time - $start_test_time] -format %M:%S]
         set end_test_time $time
@@ -207,7 +214,7 @@ proc doit {args} {
     set numrun [llength [array size running]]
     set elapsed [clock format [expr $time - $start] -format %M:%S]
     if {!$skip} {
-        puts [format {%s %s [%3d %3d %3d] %s %s} $id $elapsed $numfailed $numpassed $numfinish $test_elapsed $line]
+        puts [format {%s %s [%3d %3d %3d %3d] %s %s} $id $elapsed $numfailed $numerror $numpassed $numfinish $test_elapsed $line]
         if {"$test_elapsed" != ""} {
             set test_elapsed "     "
         }

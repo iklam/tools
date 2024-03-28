@@ -1,8 +1,14 @@
 set host localhost
 
 if {[catch {
+    # Each compiler job has a weight of 100 -- it typically consumes 1 cpu
     set sock_fd [socket localhost 9989]
+    puts $sock_fd 100
+    puts $sock_fd $argv
+    flush $sock_fd
     set host [gets $sock_fd]
+    set slot [gets $sock_fd]
+    #puts host=$host=$slot
 } err]} {
     if {[info exists env(DISTCC_TRACE)]} {
         puts "distcc: Error $err"

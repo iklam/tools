@@ -68,7 +68,7 @@ proc update {args} {
 
             if {[info exists last_used($id)]} {
                 set b [button .bottom.$id -text $name -command "activate $id"]
-                pack $b -side left
+                pack $b -side top -fill x
                 bind $b <Control-Enter> "cover $id"
                 bind $b <Leave> "uncover"
             }
@@ -97,7 +97,7 @@ proc activate {id} {
     set last_used($id) [clock seconds]
     set show_cover_after -1
 
-    set max 5
+    set max 8
     set names [lsort [array names last_used]]
     if {[llength $names] > $max} {
         set times {}

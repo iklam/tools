@@ -63,7 +63,7 @@ if {[regexp {0x[0-9a-f]+$} $active active]} {
                 }
 
                 if {$should_hide($pid)} {
-                    puts HIDE=$id=$line
+                    #puts HIDE=$id=$line
                     catch {
                         exec xdotool windowminimize [expr $id + 0]
                     }
