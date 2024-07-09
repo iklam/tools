@@ -1,0 +1,63 @@
+With latest build of JDK mainline and Leyden premain branch
+
+
+(Mainline vs Premain:
+
+   Premain has these options specified:
+        -XX:+PreloadSharedClasses
+        -XX:+ArchiveInvokeDynamic
+
+        -XX:-ArchiveDynamicProxies
+        -XX:-ArchiveLoaderLookupCache
+        -XX:-ArchivePackages
+        -XX:-ArchiveReflectionData
+
+/jdk3/tools/tests/preloaded-classes-bench$ make perf
+tclsh ../../bench/cds-micro-bench/perf_stat_to_csv.tcl < log.txt 
+Left,Right,Left,Right
+155506853,100464540,27.142,18.895,
+155911280,100647150,26.976,18.897,
+156111853,100426860,27.109,18.941,
+155397761,100663588,26.951,19.049,
+155463627,100817355,27.066,18.891,
+155811473,100857660,27.122,18.927,
+155920859,100700840,27.044,18.989,
+155335170,100446851,27.041,18.961,
+155827274,100757506,27.101,19.013,
+155282409,100538633,27.189,18.860,
+Left : perf stat -r 40 /jdk3/bld/rum/images/jdk/bin/java -Xshare:on -XX:SharedArchiveFile=old.jsa -cp HelloWorld.jar HelloWorld
+Right: perf stat -r 40 /jdk3/bld/le4/images/jdk/bin/java -Xshare:on -XX:SharedArchiveFile=new.jsa -cp HelloWorld.jar HelloWorld
+   1:    155506853   100464540 (-55042313)      -----     27.142    18.895 ( -8.247)      ----- 
+   2:    155911280   100647150 (-55264130)      -----     26.976    18.897 ( -8.079)      ----- 
+   3:    156111853   100426860 (-55684993)      -----     27.109    18.941 ( -8.168)      ----- 
+   4:    155397761   100663588 (-54734173)      -----     26.951    19.049 ( -7.901)      ----- 
+   5:    155463627   100817355 (-54646272)      -----     27.066    18.891 ( -8.175)      ----- 
+   6:    155811473   100857660 (-54953813)      -----     27.122    18.927 ( -8.195)      ----- 
+   7:    155920859   100700840 (-55220019)      -----     27.044    18.989 ( -8.056)      ----- 
+   8:    155335170   100446851 (-54888319)      -----     27.041    18.961 ( -8.080)      ----- 
+   9:    155827274   100757506 (-55069768)      -----     27.101    19.013 ( -8.088)      ----- 
+  10:    155282409   100538633 (-54743776)      -----     27.189    18.860 ( -8.329)      ----- 
+============================================================
+         155656610   100631988 (-55024621)      -----     27.074    18.942 ( -8.132)      ----- 
+instr delta =    -55024621    -35.3500%
+time  delta =       -8.132 ms -30.0357%
+
+
+
+(With plain mainline JDK itself)
+
+/jdk3/tools/tests/preloaded-classes-bench$ !perf
+perf stat -r 40 /jdk3/bld/rum/images/jdk/bin/java -cp HelloWorld.jar HelloWorld > /dev/null
+
+ Performance counter stats for '/jdk3/bld/rum/images/jdk/bin/java -cp HelloWorld.jar HelloWorld' (40 runs):
+
+             36.81 msec task-clock                #    1.155 CPUs utilized            ( +-  0.14% )
+               153      context-switches          #    4.146 K/sec                    ( +-  0.63% )
+                 7      cpu-migrations            #  189.680 /sec                     ( +-  4.26% )
+             5,225      page-faults               #  141.582 K/sec                    ( +-  0.03% )
+       167,798,788      cycles                    #    4.547 GHz                      ( +-  0.14% )
+       173,206,825      instructions              #    1.03  insn per cycle           ( +-  0.02% )
+        31,631,600      branches                  #  857.124 M/sec                    ( +-  0.03% )
+         1,033,150      branch-misses             #    3.26% of all branches          ( +-  0.10% )
+
+          0.031872 +- 0.000401 seconds time elapsed  ( +-  1.26% )
