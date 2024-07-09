@@ -1,0 +1,10 @@
+keystore "file:bad.keystore";
+keystorePasswordURL "file:keypass";
+
+grant signedBy "mykey" {
+    permission java.lang.RuntimePermission "setIO";
+};
+
+grant {
+    permission java.lang.RuntimePermission "getProtectionDomain";
+};
