@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# See https://github.com/neutrinolabs/xrdp/issues/1723
+
+touch /tmp/foo1$DISPLAY
+
+test x"$SHELL" = x"" && SHELL=/bin/bash
+test x"$1"     = x"" && set -- default
+
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+
+vncconfig -iconic &
+"$SHELL" -l << EOF
+export XDG_SESSION_CLASS=user
+export XDG_SESSION_TYPE=x11
+export XDG_CURRENT_DESKTOP=ubuntu:GNOME
+export XDG_CONFIG_DIRS=/etc/xdg/xdg-ubuntu:/etc/xdg
+export GNOME_SHELL_SESSION_MODE=ubuntu
+export XDG_MENU_PREFIX=gnome-
+dbus-launch --exit-with-session gnome-session --session=ubuntu
+EOF
+
+vncserver -kill $DISPLAY

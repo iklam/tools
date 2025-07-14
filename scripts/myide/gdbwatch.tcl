@@ -95,7 +95,7 @@ proc make_gui {} {
     set n 0
     foreach host $distcc_order {
         incr n
-        if {$n > 3} {
+        if {$n > 2} {
             set frame $t.botrow1
         } else {
             set frame $t.botrow0
@@ -109,6 +109,9 @@ proc make_gui {} {
         set distcc_total($host) 0
         set distcc_btn($host) $t.dist_$host 
     }
+    set distcc_btn(elapsed) [label $t.botrow1.elapsed -text "Elapsed 00:00"]
+    pack $distcc_btn(elapsed) -side left
+
 
     set hlist [$sl subwidget hlist]
     $hlist config -selectforeground black -selectbackground #a0a0ff -command sync_emacs -font {{DejaVu Sans Mono} -10} -columns 4
@@ -350,21 +353,33 @@ proc update_available_hosts {} {
 
 proc update_hosts_stats {} {
     global distcc_order distcc_active distcc_total distcc_history distcc_btn
+    global distcc_start_time
+
+    if {![info exists distcc_history]} {
+        return
+    }
 
     foreach host $distcc_order {
         set perc ""
         catch {
             set n [array size distcc_history]
             if {$n > 0} {
-                set perc ",[expr int(100.0 * $distcc_total($host) / $n)]%"
+                set perc ", [expr int(100.0 * $distcc_total($host) / $n)]%"
             }
-            if {$perc == ",0%"} {
+            if {$perc == ", 0%"} {
                 set perc ""
             }
         }
-        set cbtext "$host ($distcc_active($host),$distcc_total($host)$perc)"
+        set cbtext "$host ($distcc_active($host), $distcc_total($host)$perc)"
         regsub ioi $cbtext "" cbtext
         $distcc_btn($host) config -text $cbtext
+    }
+
+    if {[info exists distcc_start_time]} {
+        set e [expr [clock seconds] - $distcc_start_time]
+        set s [expr $e % 60]
+        set m [expr $e / 60]
+        $distcc_btn(elapsed) config -text [format "Elapsed %02d:%02d" $m $s]
     }
 }
 
@@ -590,6 +605,7 @@ set distcc_finished 0
 set lasttime 0
 proc refresh_compile {{mode {}}} {
     global hlist distcc_order distcc_active distcc_total distcc_selected distcc_history distcc_finished lasttime
+    global distcc_start_time
     set now [clock seconds]
     $hlist delete all
 
@@ -628,6 +644,7 @@ proc refresh_compile {{mode {}}} {
     if {$now - $lasttime > 5} {
         set distcc_finished 0
         catch {unset distcc_history}
+        catch {unset distcc_start_time}
         foreach host [array names distcc_total] {
             set distcc_total($host) 0
         }
@@ -655,6 +672,10 @@ proc refresh_compile {{mode {}}} {
 
         incr distcc_active($who)
         if {![info exists distcc_history($who,$file)]} {
+            if {![info exists distcc_start_time]} {
+                set distcc_start_time [clock seconds]
+                #xraise gdbwatch.tcl
+            }
             set distcc_history($who,$file) 1
             incr distcc_total($who) 1
         }

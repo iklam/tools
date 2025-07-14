@@ -14,7 +14,9 @@ if {[info exists env(TEST_QQ)]} {
 } else {
     if {$DEBUG} {
         #catch {set logfd [open /dev/pts/7 w+]; puts $logfd "Using $logfd"}
-        catch {set logfd [open /tmp/qqclip-debug w+]; puts $logfd "Using $logfd"}
+        if {[catch {set logfd [open /tmp/qqclip-debug w+]; puts $logfd "Using $logfd"} err]} {
+            puts $err
+        }
     }
     #set logfd [open /dev/pts/8 w+]
 }
@@ -116,7 +118,7 @@ if {[regexp ^/ $text]} {
     }
 } else {
     if {[catch {
-        if {![info exists env(REPO_ROOT)] || $env(REPO_ROOT) == ""} {
+        if {![info exists env(REPO_ROOT)] || $env(REPO_ROOT) == "" || 1} {
             # We are probably running with Ctrl-btn-3
             set fd [open /tmp/autoraise-active-term]
             set line [gets $fd]
@@ -135,6 +137,8 @@ if {[regexp ^/ $text]} {
             } else {
                 exit
             }
+
+            log "line = $line"
 
             if {![try_xpwd $text $xwin] &&
                 ![try_dir $text open/src/hotspot] &&

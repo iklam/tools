@@ -396,7 +396,7 @@ proc translate_version {version} {
 proc git_version_alias {v} {
     if {"$v" == "parent"} {
         foreach line [split [exec git branch -vv] \n] {
-            if {[regexp {^[*].*\[([^\n:\]]+)} $line dummy parent]} {
+            if {[regexp {^[*][^\]]*\[([^\n:\]]+)} $line dummy parent]} {
                 puts "parent branch = $parent"
                 return $parent
             }

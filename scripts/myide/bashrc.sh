@@ -8,12 +8,13 @@ alias tools='cd ${IOIGIT}'
 # GIT
 #======================================================================
 
-alias gitref='git commit -a --amend --date=now --no-edit'
+alias gitref='git commit -a --amend --date=now --no-edit --reset-author'
 alias gitout='git log origin/master..'
 #alias gitout='git log --branches --not --remotes=origin'
 alias gitb='git branch'
 alias gitsw='git switch'
 alias gitst='git status'
+alias gitstt='git status .'
 alias gitcp='git cherry-pick'
 alias gitl='git log'
 alias gitbh='tclsh ${IOIGIT}/scripts/scm/git_branch_hierarchy.tcl'
@@ -23,18 +24,56 @@ alias gitcpc='git cherry-pick --continue'
 alias gitbranches='tclsh ${IOIGIT}/scripts/scm/gitbranches.tcl'
 alias gitblame='tclsh ${IOIGIT}/scripts/scm/gitblame.tcl'
 alias gitweb='tclsh ${IOIGIT}/scripts/scm/gitweb.tcl'
+alias gitswtc='git switch --track=direct -c'
+alias grepjar='tclsh ${IOIGIT}/scripts/misc/grepjar.tcl'
+alias gittodos='gitdiffgrep master "(TODO)|(FIXME)"'
 
+
+function gitdiffgrep () {
+    local pat=$1
+    if test "$2" != ""; then
+        pat=$2;
+    fi
+    pat="(^[+][+])|($pat)"
+    sed="s/^[+][+][+] b./+++ /g"
+    if test "$2" != ""; then
+        git diff $1 | sed -e "$sed" | egrep $pat
+    else
+        git diff | egrep $pat
+    fi
+}
+
+# gitrevert master src/hotspot/share/cds/archiveBuilder.cpp
+# alias gvm='gitrevert master'
 function gitrevert () {
-    git show $1:$2 > /tmp/gitrevert.tmp || exit 1
-    mv /tmp/gitrevert.tmp $2
-    echo updated $2 to version $1
+    if git show $1:$2 > /tmp/gitrevert.tmp; then
+        mv /tmp/gitrevert.tmp $2
+        echo updated $2 to version $1
+    else
+        rm -f /tmp/gitrevert.tmp
+        echo usage $0 version file
+    fi
 }
 
 # Used for diffing two diff files
 alias filterdiff='tclsh ${IOIGIT}/scripts/scm/filter_diff.tcl'
 
+function is-in-leyden () {
+    if git branch | grep -q premain; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 function git-refresh () {
-    if git branch | grep -q '[*] master'; then
+    if is-in-leyden; then
+        local parent=premain
+    else
+        local parent=master
+    fi
+
+    if git branch | grep -q "[*] $parent"; then
     (
         (set -x; git branch) || return;
         (set -x; git status) || return;
@@ -44,19 +83,19 @@ function git-refresh () {
             echo skipped
             return
         fi
-        git pull upstream master || return;
+        (set -x; git pull upstream $parent) || return;
 
-        git push origin
+        (set -x; git push origin)
     )
     else
-        echo "You are not on master branch??"
+        echo "You are not on $parent branch??"
     fi
 }
 
 function current-branch () {
     (
         cdo
-        git branch | grep '[*]' | cut -b 3-
+        echo $(git branch | grep '[*]' | cut -b 3-)-$(git log -1 | head -1 | sed -e 's/commit //' -e 's/ /-/g')
     )
 }
 
@@ -74,7 +113,7 @@ alias qe='qq -nofind'
 # qqclip = open the file in the clipboard text
 alias qq='tclsh ${IOIGIT}/scripts/myide/qq.tcl'
 alias qw='tclsh ${IOIGIT}/scripts/myide/qq.tcl -w'
-alias qqq='REVERT=1 qq'
+#alias qqq='REVERT=1 qq'
 alias qqclip='tclsh ${IOIGIT}/scripts/myide/qq-clipboard.tcl'
 
 complete -F __qq_complete qq
@@ -287,9 +326,11 @@ function cdsrun () {
         cmd="$cmd -cp $testcp"
     fi
 
-    local NEW_WF_ARGS="-XX:+PreloadSharedClasses -XX:+ArchiveInvokeDynamic"
-    local OLD_WF_ARGS="-XX:+PreloadSharedClasses -XX:+ArchiveDynamicProxies -XX:+ArchiveFieldReferences -XX:+ArchiveInvokeDynamic -XX:+ArchiveReflectionData"
-
+    local NEW_WF_ARGS=""
+    local LOG_CDS="-Xlog:aot,cds"
+    if test "$NO_LOG_CDS" != ""; then
+        LOG_CDS=""
+    fi
     case "$testmode" in
         none)
             # none = run the app as is, without any app-specific CDS optimizations
@@ -301,34 +342,60 @@ function cdsrun () {
             ;;
         old1)
             # old1 = old workflow: dump static archive
-            cmd="$cmd -Xshare:dump -Xlog:cds -XX:SharedArchiveFile=$testname.jsa -XX:SharedClassListFile=$testname.classlist"
+            cmd="$cmd -Xshare:dump $LOG_CDS -XX:SharedArchiveFile=$testname.jsa -XX:SharedClassListFile=$testname.classlist"
             ;;
         old2)
             # old1 = old workflow: run with static archive
             cmd="$cmd -Xshare:on -XX:SharedArchiveFile=$testname.jsa"
             ;;
-        premain1)
-            # Premain 1 = old workflow with Premain optimizations: dump static archive
-            cmd="$cmd -Xshare:dump -Xlog:cds $OLD_WF_ARGS -XX:SharedArchiveFile=$testname.p.jsa -XX:SharedClassListFile=$testname.classlist"
+        preload01)
+            # JEP 514
+            cmd="$cmd -XX:AOTMode=record -XX:AOTCacheOutput=$testname.aot -Xlog:cds"
             ;;
-        premain2)
-            # Premain 2 = old workflow with Premain optimizations: run with static archive
-            cmd="$cmd -Xshare:on -XX:SharedArchiveFile=$testname.p.jsa"
+        preload0)
+            # old0 = old workflow: dump classlist for static archive
+            cmd="$cmd -XX:AOTMode=record -XX:AOTConfiguration=$testname.aotconfig"
+            ;;
+        preload1)
+            # Preload 1 = old static workflow with class preloading: dump static archive
+            cmd="$cmd -XX:AOTMode=create $LOG_CDS -XX:AOTCache=$testname.aot -XX:AOTConfiguration=$testname.aotconfig"
+            ;;
+        preload2)
+            # Preload 2 = old static workflow with class preloading: run with static archive
+            cmd="$cmd -XX:AOTMode=on -XX:AOTCache=$testname.aot"
+            ;;
+        preload3)
+            # Preload 3 = re-train with an existing AOT cache
+            cmd="$cmd -XX:AOTMode=record -XX:AOTConfiguration=$testname.aotconfig -XX:AOTCache=$testname.aot"
+            ;;
+        dpreload0)
+            # Dynamic Preload 0 = old dynamic workflow with class preloading: dump dynamic archive
+            cmd="$cmd -XX:+AOTClassLinking -XX:ArchiveClassesAtExit=$testname.dp.jsa"
+            ;;
+        dpreload1)
+            # Dynamic Preload 1 = old dynamic workflow with class preloading: run with dynamic archive
+            cmd="$cmd -XX:SharedArchiveFile=$testname.dp.jsa"
             ;;
         new0)
             # new0 = new workflow: dump preimage
             rm -vf $testname.cds
             rm -vf $testname.cds.preimage
-            cmd="$cmd -Xlog:cds ${NEW_WF_ARGS} -XX:+UnlockDiagnosticVMOptions"
+            cmd="$cmd $LOG_CDS ${NEW_WF_ARGS} -XX:+UnlockDiagnosticVMOptions"
             cmd="$cmd -XX:+CDSManualFinalImage -XX:CacheDataStore=$testname.cds"
             ;;
         new1)
             # new1 = new workflow: dump final image
-            cmd="$cmd -Xlog:cds ${NEW_WF_ARGS} -XX:CDSPreimage=$testname.cds.preimage -XX:CacheDataStore=$testname.cds"
+            cmd="$cmd $LOG_CDS ${NEW_WF_ARGS} -XX:CDSPreimage=$testname.cds.preimage -XX:CacheDataStore=$testname.cds"
+            ;;
+        newd)
+            rm -vf $testname.cds
+            rm -vf $testname.cds.preimage
+            # newd = new workflow: dump (with a single command)
+            cmd="$cmd $LOG_CDS ${NEW_WF_ARGS} -XX:CacheDataStore=$testname.cds"
             ;;
         new2)
             # new2 = new workflow: use final image
-            cmd="$cmd -Xlog:cds ${NEW_WF_ARGS} -XX:CacheDataStore=$testname.cds"
+            cmd="$cmd $LOG_CDS ${NEW_WF_ARGS} -XX:CacheDataStore=$testname.cds"
             ;;
     esac
 
@@ -352,18 +419,40 @@ function cdsrun-define () {
     alias ${testname}o1="$run old1"
     alias ${testname}o2="$run old2"
 
-    alias ${testname}p0="$run old0"
-    alias ${testname}p1="$run premain1"
-    alias ${testname}p2="$run premain2"
+    # Preloaded (static)
+    alias ${testname}p01="$run preload01"
+    alias ${testname}p0="$run preload0"
+    alias ${testname}p1="$run preload1"
+    alias ${testname}p2="$run preload2"
+    alias ${testname}p3="$run preload3"
+
+    # Preloaded (dynamic)
+    alias ${testname}dp0="$run dpreload0"
+    alias ${testname}dp1="$run dpreload1"
 
     alias ${testname}n0="$run new0"
     alias ${testname}n1="$run new1"
     alias ${testname}n01="$run new0 && $run new1"
+    alias ${testname}nd="$run newd"
     alias ${testname}n2="$run new2"
 }
 
 cdsrun-define vv "" --version
 cdsrun-define hw ~/tmp/HelloWorld.jar HelloWorld
+cdsrun-define hc ~/tmp/HelloCustom.jar HelloCustom
+cdsrun-define hl ~/tmp/HelloLambda.jar HelloLambda
+cdsrun-define mh ~/tmp/HelloMH.jar HelloMH
 cdsrun-define st ~/tmp/StreamTest.jar StreamTest
+cdsrun-define pd ~/tmp/PDTest.jar PDTest
+cdsrun-define pl ~/tmp/PreloadTest.jar PreloadTest
 cdsrun-define pk ~/tmp/PkgTest.jar test.pkg.PkgTest
+cdsrun-define xx ~/tmp/jdk-8290417/test.jar Test
+cdsrun-define mt ~/tmp/MyTest.jar MyTest
+cdsrun-define pk ~/tmp/PackageTest.jar test.pkg.PackageTest
+cdsrun-define md "" "-p ${HOME}/tmp/modules/ioi/app.jar:${HOME}/tmp/modules/ioi/dir -m app/app.Main"
 cdsrun-define jc "" "com.sun.tools.javac.Main -d . ~/tmp/HelloWorld.java"
+cdsrun-define ss $TESTBED/demo/jfc/SwingSet2/SwingSet2.jar SwingSet2
+
+
+
+

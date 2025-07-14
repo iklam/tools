@@ -5,7 +5,7 @@ set always_show_done 0
 
 proc update {args} {
     #puts update
-    global cur_desktop always_show_done last_used
+    global cur_desktop always_show_done last_used last_activated
     if {"$args" != "-force"} {
         after 300 update
     }
@@ -61,22 +61,26 @@ proc update {args} {
     foreach item [lsort $list] {
         if {[regexp {^(.*)==[0-9a-f]+==(0x[0-9a-f]+)$} $item dummy name id]} {
             #puts $item
-            set b [button .$id -text $name -command "activate $id"]
+            set b [button .$id -text $name -command "activate $id" -pady 0]
             pack $b -side left
             bind $b <Control-Enter> "cover $id"
             bind $b <Leave> "uncover"
 
             if {[info exists last_used($id)]} {
-                set b [button .bottom.$id -text $name -command "activate $id"]
+                set b [button .bottom.$id -text $name -command "activate $id" -pady 0]
                 pack $b -side top -fill x
                 bind $b <Control-Enter> "cover $id"
                 bind $b <Leave> "uncover"
+
+                if {$id == $last_activated} {
+                    $b config -bg #a8a0a0 -activebackground #a8a0a0
+                }
             }
 
         }
     }
-    wm geometry . +43+25
-    wm geometry .bottom +43-0
+    wm geometry . +0+25
+    wm geometry .bottom +0-25
 
     if {[winfo children .bottom] == {}} {
         wm withdraw .bottom
@@ -86,10 +90,20 @@ proc update {args} {
 }
 
 proc activate {id} {
-    global show_cover_after last_used
-    catch {
-        exec xdotool windowactivate $id
+    global show_cover_after last_used last_activated
+
+    if {$id == $last_activated} {
+        catch {
+            exec xdotool windowminimize $id
+        }
+        set last_activated ""
+    } else {
+        catch {
+            exec xdotool windowactivate $id
+        }
+        set last_activated $id
     }
+
     catch {
         destroy .cover
     }
@@ -117,9 +131,9 @@ proc activate {id} {
     set new [lsort [array names last_used]]
 
     #puts "$old == $new"
-    if {$new != $old} {
+    #if {$new != $old} {
         update -force
-    }
+    #}
 }
 
 set show_cover_after -1
@@ -185,17 +199,18 @@ proc set_desktop {n} {
 proc make_ui {} {
     wm overrideredirect . true
     wm geometry . +0-0
-    set r  [button .refresh_desktop -text R -command {update -force}]
-    set b1 [button .prev_desktop -text < -command "set_desktop -1"]
-    set b2 [button .next_desktop -text > -command "set_desktop 1"]
-    pack $r  -side left
-    pack $b1 -side left
-    pack $b2 -side left
+    set r  [button .refresh_desktop -text R -command {update -force} -pady 0]
+    set b1 [button .prev_desktop -text < -command "set_desktop -1" -pady 0]
+    set b2 [button .next_desktop -text > -command "set_desktop 1" -pady 0]
+    pack $r  -side left -padx 0 -pady 0
+    pack $b1 -side left -padx 0 -pady 0
+    pack $b2 -side left -padx 0 -pady 0
 
     toplevel .bottom
     wm overrideredirect .bottom true
     wm geometry .bottom +0-0
 }
 
+set last_activated ""
 make_ui
 update

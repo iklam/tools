@@ -27,6 +27,10 @@ checkbutton .s.c -text "Tksvn" -width 6 -anchor w -variable s -command "docheck 
 button .s.b -text "Raise" -width 6 -command {xraise tksvn 1}
 pack .s.c .s.b -side left -fill y
 
+set e 1
+set t 1
+set s 1
+
 frame .cmd
 pack .cmd -side top -expand yes -fill x
 button .cmd.buf -text buf -command exec_buf
@@ -96,7 +100,7 @@ proc update_focused_terminal {} {
         if {[regexp "Window state:\[\n\r\t \]*Focused" $data]} {
             if {$focused_terminal_wid != $wid} {
                 set focused_terminal_wid $wid
-                puts "Focused terminal changed to: $line"
+                #puts "Focused terminal changed to: $line"
                 set wfd [open /tmp/autoraise-active-term w+]
                 puts $wfd "Currently active gnome terminal window ID is $wid\n$line"
                 close $wfd
@@ -183,6 +187,9 @@ proc try_satisfy_distcc_request {fd} {
         set distcc_selected($host) 1
     }
 
+    #puts ------------------------------
+    #parray distcc_active
+
     # Find the host with the lowest load
     set found {}
     set lowest_load 99999999.0
@@ -245,6 +252,8 @@ proc do_distcc_fileevent {fd host} {
     }
     if {[eof $fd]} {
         incr distcc_active($host) -$distcc_cpuneed($fd)
+        #puts $host=$distcc_active($host)=$distcc_cpuneed($fd)
+        #parray distcc_active
         unset distcc_cpuneed($fd)
         unset distcc_cmdline($fd)
         # Free the slot, so it can be reused by future clients

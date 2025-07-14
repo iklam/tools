@@ -49,14 +49,23 @@ proc print_compilation_error {file} {
     if {$errors_len >= $max_err} {
         return
     }
+    set id ""
+    set pat {\#([0-9a-z_-]+)$}
+    if {[regexp $pat $file dummy id]} {
+        set id _$id
+        regsub $pat $file "" file
+    }
+
     set file [file tail $file]
     set file [file root $file]
     catch {
-        set file [exec find $env(HOME)/tmp/$env(JTREG_DIR) -name $file.jtr | xargs ls -tr | tail -1]
+        set file [exec find $env(HOME)/tmp/$env(JTREG_DIR) -name $file$id.jtr | xargs ls -tr | tail -1]
     }
     if {[file exists $file]} {
         set fd [open $file]
-        set data [read $fd]
+        set data ""
+        catch {set data [read $fd]}
+        catch {close $fd}
         regsub -all {[-][-]direct:} $data \uffff data
         regsub .*\uffff $data \uffff data
         if {[regexp {\uffff([^\uffff]+) Compilation failed:} $data dummy error]} {
@@ -80,7 +89,6 @@ proc print_compilation_error {file} {
             puts ----------------------------------------------------------------------
             
         }
-        close $fd
     }
 }
 
@@ -183,6 +191,12 @@ proc doit {args} {
         unset running($test)
         incr numfinish
         set skip 1
+    } elseif {[regexp {^Passed. Skipped: jtreg.SkippedException: (.*)} $line dummy msg]} {
+        set line "$last_test\n    Skipped: $msg"
+        set failures($line) 1
+        incr numerror
+        set line "**SKP  $last_test"
+        incr totalError 1
     } elseif {[regexp {^Passed.} $line]} {
         incr numpassed
         set line "  pass $last_test"

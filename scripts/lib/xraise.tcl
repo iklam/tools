@@ -37,7 +37,7 @@ proc xraise {name {force 0}} {
     }
 
     catch {exec wmctrl -i -a [lindex $list $last($name)]}
-        return 1
+    return 1
 }
 
 proc get_all_wm_windows {{name .}} {

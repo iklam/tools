@@ -65,6 +65,19 @@ while {1} {
     }
 }
 
+proc ioisort {a b} {
+    if {[regexp ^jep $a]} {
+        if {![regexp ^jep $b]} {
+            return -1;
+        }
+    } elseif {[regexp ^jep $b]} {
+        return 1
+    }
+
+    return [string comp $a $b]
+
+}
+
 proc dump {branch prefix} {
     global children a b current active
 
@@ -92,7 +105,7 @@ proc dump {branch prefix} {
         set prefix "$prefix  "
 
         for {set n 0} {$n < 2} {incr n} {
-            foreach c [lsort $children($branch)] {
+            foreach c [lsort -command ioisort $children($branch)] {
                 if {[info exists active($c)]} {
                     set m 0
                 } else {

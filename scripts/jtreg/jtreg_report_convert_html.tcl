@@ -159,6 +159,12 @@ proc convert_html {jtr} {
         append data \n$line
         incr n
     }
+
+    set r [print_hs_err_files $jtr_data_dir]
+    if {"$r" != ""} {
+        append reason $r
+    }
+
     close $fd
     set fd [open $html w+]
 
@@ -243,7 +249,7 @@ proc convert_html {jtr} {
 
 
 proc fix_link {jtr_data_dir pat filename line} {
-    global env
+    global env g_data
 
     set filename [file tail $filename]
     set mts 0
@@ -259,8 +265,10 @@ proc fix_link {jtr_data_dir pat filename line} {
     if {$mts > 0 || $mtd > 0} {
         if {$mts >= $mtd} {
             set file $s
+            set g_data(from_scratch) 1
         } else {
             set file $d
+            set g_data(from_scratch) 0
         }
         regsub {^[.]/} $file "" file
 
@@ -271,6 +279,38 @@ proc fix_link {jtr_data_dir pat filename line} {
         regsub $pat $line "\\1 $file" line
     }
     return $line
+}
+
+proc print_hs_err_files {jtr_data_dir} {
+    global env g_data
+
+    if {[info exists g_data(from_scratch)] && $g_data(from_scratch) == "1"} {
+        set dir work/scratch/
+    } else {
+        set dir $jtr_data_dir
+    }
+
+    set result ""
+    set prefix ""
+    foreach f [glob -nocomplain $dir/hs_err\*.log] {
+        set fd [open $f]
+        set data [read $fd]
+        close $fd
+        regsub {[-]* S U M M A R Y.*} $data "" data
+        regsub -all "#\[ \n\r\]*" $data "" data
+        regsub "A fatal error has been\[^\n\]*\n" $data "" data
+        regsub "JRE version:\[^\n\]*\n" $data "" data
+        regsub "Java VM:\[^\n\]*\n" $data "" data
+        regsub "Problematic frame:\[^\n\]*\n" $data "" data
+        regsub "Core dump will be written.*" $data "" data
+        set data [string trim $data]
+        regsub -all \n $data <br> data
+        append result $prefix
+        set prefix <br>
+        append result $data
+    }
+
+    return $result
 }
 
 convert_html [lindex $argv 0]
