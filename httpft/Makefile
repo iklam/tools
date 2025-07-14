@@ -12,6 +12,9 @@ endif
 app: ${SRC}
 	cd gs-spring-boot/complete && JAVA_HOME=${GOODJAVAHOME} mvn ${MVN_OPTS} -Dmaven.test.skip=true package
 
+TOKEN = -Dhttpft.token=${HTTPFT_TOKEN}
+
+# Run with HTTPS (default)
 run:
 	${GOODJAVAHOME}/bin/java \
 	    -Dspring.output.ansi.enabled=NEVER \
@@ -22,6 +25,16 @@ run:
 	    -Dserver.ssl.key-store-type=pkcs12 \
 	    -Dserver.ssl.key-alias=springboot \
 	    -Dserver.ssl.key-password=password \
+	    ${TOKEN} \
+	    -jar ./gs-spring-boot/complete/target/spring-boot-complete-0.0.1-SNAPSHOT.jar
+
+# Run with HTTP (for testing)
+run0:
+	${GOODJAVAHOME}/bin/java \
+	    -Dspring.output.ansi.enabled=NEVER \
+	    -Dserver.port=8443 \
+	    -Dserver.address=0.0.0.0 \
+	    ${TOKEN} \
 	    -jar ./gs-spring-boot/complete/target/spring-boot-complete-0.0.1-SNAPSHOT.jar
 
 # This is the self-signed key for testing
@@ -34,7 +47,7 @@ key:
 	@if ! test -f "${HTTPFT_CERT}"; then echo invalid HTTPFT_CERT; exit 1; fi
 	@if ! test -f "${HTTPFT_KEY}"; then echo invalid HTTPFT_KEY; exit 1; fi
 	rm -f springboot.p12
-	openssl pkcs12 -export -name springboot -in ${HTTPFT_CERT} -inkey ${HTTPFT_KEY} -out springboot.p12 -password pass:password
+	openssl pkcs12 -export -name springboot -in ${HTTPFT_CERT} -inkey ${HTTPFT_KEY}.pem -out springboot.p12 -password pass:password
 
 # I have version 7d77ad35767ff76f0a8f670a2ecd532083917dcc
 ___git:
@@ -51,10 +64,10 @@ clean:
 
 
 up:
-	${GOODJAVAHOME}/bin/java -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
-		up ${HTTPFT_SERVER} $(shell pwd)/../.git /tmp/testdiffup
+	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
+		up ${HTTPFT_SERVER} $(shell pwd)/../.git /tmp/testdiffup/.git
 
 down:
-	${GOODJAVAHOME}/bin/java -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
+	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
 		down ${HTTPFT_SERVER} $(shell pwd)/../.git /tmp/testdiffup/.git
 

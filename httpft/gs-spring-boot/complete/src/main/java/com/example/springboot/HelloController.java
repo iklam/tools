@@ -4,12 +4,15 @@ import java.io.*;
 import java.nio.*;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.net.http.HttpClient;
@@ -32,6 +35,9 @@ import org.springframework.http.ResponseEntity;
 
 @RestController
 public class HelloController {
+    static {
+        System.out.println("token = " + Util.token);
+    }
     @GetMapping("/")
     public String index() {
         return "Greetings from Spring Boot!\n";
@@ -118,9 +124,28 @@ public class HelloController {
     // Each POST is limited to no more than 1MB of data
     @RequestMapping(path = "/up", method = RequestMethod.POST)
     public String up(@RequestBody String request) throws IOException {
-        System.out.println(">" + request + "<");
-        return "Hello\n";
+        UploadRequest req = new UploadRequest(request);
+        File baseDir = new File(req.dir);
+
+        for (FileInfo fi : req.files) {
+            serverSideUpdateFile(baseDir, fi);
+        }
+
+        return "ok";
     }
+
+    static void serverSideUpdateFile(File baseDir, FileInfo fi) throws IOException {
+        File f = new File(baseDir, fi.file);
+        Util.prepareDirectoryFor(f);
+        boolean append = fi.offset > 0;
+        try (FileOutputStream fos = new FileOutputStream(f, append)) {
+            byte[] data = Base64.getDecoder().decode(fi.data);
+	    System.out.println("Updating: " + f + "@" + fi.offset + "[" + data.length + "]");
+            fos.write(data);
+        }
+        f.setLastModified(fi.modTime);
+    }
+
 
     // Client does this before downloading a directory from the server
     // - Client posts its own directory listing to the server
@@ -220,8 +245,10 @@ public class HelloController {
     }
 
     private static void addZipEntry(ZipOutputStream zos, File baseDir, String entryName) throws IOException {
-        try (InputStream is = new FileInputStream(new File(baseDir, entryName))) {
+        File f = new File(baseDir, entryName);
+        try (InputStream is = new FileInputStream(f)) {
             ZipEntry ze = new ZipEntry(entryName);
+            ze.setLastModifiedTime(FileTime.fromMillis(f.lastModified()));
             zos.putNextEntry(ze);
             byte[] buf = new byte[1024];
             int len;
@@ -233,15 +260,29 @@ public class HelloController {
 }
 
 class Util {
+    static final String token;
+
+    static {
+        try {
+            String path = System.getProperty("httpft.token");
+            byte[] bytes = Files.readAllBytes(Paths.get(path));
+            token = new String(bytes, "UTF-8");
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
+    }
+
     static Values split(String req) throws IOException {
+	//System.out.println("\n" + req + "\n");
         String tmp[] = req.split("&");
         String data[] = new String[tmp.length * 2];
         int i = 0;
         String name = StandardCharsets.UTF_8.name();
         for (String s: tmp) {
+	    //System.out.println("*\n" + s + "\n+\n");
             String v[] = s.split("=");
             data[i++] = URLDecoder.decode(v[0], name);
-            if (v.length > 0) {
+            if (v.length > 1) {
                 data[i++] = URLDecoder.decode(v[1], name);
             } else {
                 data[i++] = "";
@@ -287,6 +328,27 @@ class Util {
         }
         file.delete();
     }
+
+    static byte[] getData(String localDir, String file) throws IOException {
+        File f = new File(new File(localDir), file);
+        return Files.readAllBytes(f.toPath());
+    }
+
+    static long getModTime(String localDir, String file) throws IOException {
+        File f = new File(new File(localDir), file);
+        return f.lastModified();
+    }
+
+    static void prepareDirectoryFor(File f) throws IOException {
+        File parent = f.getParentFile();
+        if (!parent.exists()) {
+            parent.mkdirs();
+        } else if (!parent.isDirectory()) {
+            System.out.println("is not a directory? " + parent);
+            parent.delete();
+            parent.mkdirs();
+        }
+    }
 }
 
 class Values {
@@ -311,6 +373,8 @@ class Values {
         }
         String v = data[i+1];
         i += 2;
+
+        System.out.println(key + " = " + v);
         return v;
     }
 
@@ -322,28 +386,60 @@ class Values {
 class FileInfo {
     String file;
     long cksum;
+    long modTime;
+    int offset;
+    String data;
 
     FileInfo(String f, long c) {
         file = f;
         cksum = c;
     }
+
+    FileInfo(String f, int o, long m, String d) {
+        file = f;
+        offset = o;
+        modTime = m;
+        data = d;
+    }
 }
 
-class ChecksumRequest {
+class BaseRequest {
     String dir;
     ArrayList<FileInfo> files = new ArrayList<>();
+    Values v;
 
-    ChecksumRequest(String req) throws IOException {
-        Values v = Util.split(req);
+    BaseRequest(String req) throws IOException {
+        v = Util.split(req);
+        String token = v.get("token");
+        if (!token.equals(Util.token)) {
+            throw new RuntimeException("Token not equal: " + token);
+        }
         dir = Util.trimDir(v.get("dir"));
+    }
+}
 
-        //System.out.println(v.i);
-        //System.out.println(v.end());
+class ChecksumRequest extends BaseRequest {
+    ChecksumRequest(String req) throws IOException {
+        super(req);
+
         while (!v.end()) {
             String file = v.get("file");
             long cksum = Long.parseLong(v.get("cksum"));
             files.add(new FileInfo(file, cksum));
-            //System.out.println(file + " :: " + cksum);
+        }
+    }
+}
+
+class UploadRequest extends BaseRequest {
+    UploadRequest(String req) throws IOException {
+        super(req);
+
+        while (!v.end()) {
+            String file = v.get("file");
+            int offset = Integer.parseInt(v.get("offset"));
+            long modTime = Long.parseLong(v.get("time"));
+            String data = v.get("data");
+            files.add(new FileInfo(file, offset, modTime, data));
         }
     }
 }
@@ -367,7 +463,7 @@ class CommandLine {
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        upload(response.body());
+        upload(response.body(), url, localDir, remoteDir);
     }
 
     static void clientDown(String url, String remoteDir, String localDir) throws Exception {
@@ -428,6 +524,8 @@ class CommandLine {
 
     static void writeLocalFile(String localDir, String file, long modTime, ZipInputStream zis, byte[] buffer) throws IOException {
         File f = new File(new File(localDir), file);
+        Util.prepareDirectoryFor(f);
+/*
         File parent = f.getParentFile();
         if (!parent.exists()) {
             parent.mkdirs();
@@ -436,6 +534,7 @@ class CommandLine {
             parent.delete();
             parent.mkdirs();
         }
+*/
         try (FileOutputStream fos = new FileOutputStream(f)) {
             int len = 0;
             while ((len = zis.read(buffer)) > 0) {
@@ -451,7 +550,8 @@ class CommandLine {
         localDir = Util.trimDir(localDir);
         remoteDir = Util.trimDir(remoteDir);
         StringBuilder sb = new StringBuilder();
-        sb.append(Util.pair("0.dir", remoteDir));
+        sb.append(Util.pair("0.token", Util.token));
+        sb.append(Util.pair("&0.dir", remoteDir));
         count = 0;
         int skipDir = localDir.length() + 1; // skip "<dirname>/"
         findAllFiles(sb, skipDir, new File(localDir));
@@ -459,17 +559,87 @@ class CommandLine {
         return sb.toString();
     }
 
-    static void upload(String response) throws Exception {
+    static void upload(String response, String url, String localDir, String remoteDir) throws Exception {
         Values v = Util.split(response);
         String status = v.get("status");
         if (!status.equals("ok")) {
             throw new RuntimeException("Status is not ok = " + status);
         }
 
+        count = 0;
+        StringBuilder sb = newUploadChunk(remoteDir);
         while (!v.end()) {
             String file = v.get("upload");
-            System.out.println("need to upload: " + file);
+            System.out.println("upload: " + file);
+            byte data[] = Util.getData(localDir, file);
+            long modTime = Util.getModTime(localDir, file);
+            int n = 0;
+            boolean added = false;
+            while (n < data.length || !added) {
+                sb = flushChunk(url, remoteDir, sb, false);
+                n = appendChunk(file, modTime, sb, data, n);
+                added = true;
+            }
         }
+        flushChunk(url, remoteDir, sb, true);
+    }
+
+    static int appendChunk(String file, long modTime, StringBuilder sb, byte[] data, int start) throws IOException {
+        int available = CHUNK_LIMIT - sb.length();
+        if (available < 0) {
+            throw new RuntimeException("should not be here " + CHUNK_LIMIT + " vs " + sb.length());
+        }
+        int max_bytes = available * 7 / 10; // uuencode is about 70% efficient?
+        if (max_bytes < 100) {
+            max_bytes = 100; // It's OK to be over CHUNK_LIMIT a little;
+        }
+        int n = data.length - start;
+        if (n > max_bytes) {
+            n = max_bytes;
+        }
+
+        byte src[];
+        if (start == 0 && n == data.length) {
+            src = data;
+        } else {
+            src = new byte[n];
+            System.arraycopy(data, start, src, 0, n);
+        }
+        String b64 = Base64.getEncoder().encodeToString(src);
+        sb.append("&" + count + ".file=" + Util.encode(file) +
+                  "&" + count + ".offset=" + start +
+                  "&" + count + ".time=" + modTime +
+                  "&" + count + ".data=" + Util.encode(b64));
+        count ++;
+        return start + n;
+    }
+
+    static final int CHUNK_LIMIT = 5 * 1024 * 1024;
+    static StringBuilder flushChunk(String url, String remoteDir, StringBuilder sb, boolean force) throws Exception { 
+        if (sb.length() >= CHUNK_LIMIT || force) {
+            String post = sb.toString();
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url + "/up"))
+                .POST(HttpRequest.BodyPublishers.ofString(post))
+                .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (!response.body().equals("ok")) {
+                throw new RuntimeException("Status is not ok = " + response.body());
+            }
+            count = 0;
+            return newUploadChunk(remoteDir);
+        } else {
+            return sb;
+        }
+    }
+
+    static StringBuilder newUploadChunk(String remoteDir) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Util.pair("0.token", Util.token));
+        sb.append(Util.pair("&0.dir", remoteDir));
+        return sb;
     }
 
 
