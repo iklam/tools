@@ -1,6 +1,7 @@
 package com.example.springboot;
 
 import java.io.*;
+import java.net.*;
 import java.nio.*;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +14,7 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.net.http.HttpClient;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
@@ -257,6 +260,96 @@ public class HelloController {
             }
         }
     }
+
+
+    private static HashMap<Integer, Socket> openSockets = new HashMap<>();
+    private static ArrayList<Socket> allSockets = new ArrayList<>();
+    private static int numSockets = 0;
+
+    // Client calls this first to ask the server to make a socket connection to the
+    // specified host/port
+    @RequestMapping(path = "/sockopen", method = RequestMethod.POST)
+    public String socketOpen(@RequestBody String request) throws IOException {
+        SocketOpenRequest req = new SocketOpenRequest(request);
+        Socket sock = new Socket(req.host, req.port);
+
+        synchronized (openSockets) {
+            int max_concurrent = 2;
+            while (allSockets.size() >= max_concurrent) {
+                Socket s = allSockets.remove(0);
+                openSockets.values().remove(s);
+                System.out.println("Remove " + s + " to avoid having too many connections ");
+                try {
+                    s.close();
+                    System.out.println("---> " + "closed");
+                } catch (Throwable t) {
+                    System.out.println("---> " + s);
+                }
+
+            }
+
+            int num = numSockets ++;
+            openSockets.put(Integer.valueOf(num), sock);
+            allSockets.add(sock);
+            System.out.println("Total opened sockets = " + openSockets.size() + "/" + allSockets.size());
+            return "" + num + " " +  allSockets.size();
+        }
+    }
+
+    // Client calls to read from a socket (should read at least one byte)
+    @RequestMapping(path = "/sockread", method = RequestMethod.POST)
+    public ResponseEntity<byte[]> socketRead(@RequestBody String request) throws IOException {
+        SocketReadRequest req = new SocketReadRequest(request);
+
+        HttpStatusCode status = HttpStatus.OK;
+        byte[] result = new byte[req.bytes];
+        int n = -1;
+        
+        try {
+            n = req.sock.getInputStream().read(result);
+        } catch (Throwable e) {
+            synchronized (openSockets) {
+                System.out.println("Socket is probably closed. Open count = " + openSockets.size() + "/" + allSockets.size());
+            }
+            status = HttpStatus.NOT_FOUND;
+        }
+        if (n < 0) {
+            n = 0;
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentLength(n);
+        return new ResponseEntity<byte[]>(result, headers, status);
+    }
+
+    // Client calls to write into a socket
+    @RequestMapping(path = "/sockwrite", method = RequestMethod.POST)
+    public String socketWrite(@RequestBody String request) throws IOException {
+        SocketWriteRequest req = new SocketWriteRequest(request);
+        OutputStream out = req.sock.getOutputStream();
+        String decoded = URLDecoder.decode(req.data, StandardCharsets.UTF_8.name());
+        byte[] data = Base64.getDecoder().decode(decoded);
+        out.write(data);
+        return "ok";
+    }
+
+    // Client calls to close a socket
+    @RequestMapping(path = "/sockclose", method = RequestMethod.POST)
+    public String socketClose(@RequestBody String request) throws IOException {
+        SocketCloseRequest req = new SocketCloseRequest(request);
+        req.sock.close();
+        synchronized (openSockets) {
+            allSockets.remove(req.sock);
+            openSockets.remove(Integer.valueOf(req.sockID));
+        }
+        return "ok";
+    }
+
+    static Socket getSocketFromID(int sockID) {
+        synchronized (openSockets) {
+            return openSockets.get(Integer.valueOf(sockID));
+        }
+    }
 }
 
 class Util {
@@ -374,7 +467,7 @@ class Values {
         String v = data[i+1];
         i += 2;
 
-        System.out.println(key + " = " + v);
+        //System.out.println(key + " = " + v);
         return v;
     }
 
@@ -444,12 +537,63 @@ class UploadRequest extends BaseRequest {
     }
 }
 
+
+class SocketOpenRequest extends BaseRequest {
+    String host;
+    int port;
+
+    SocketOpenRequest(String req) throws IOException {
+        super(req);
+        host = v.get("host");
+        port = Integer.parseInt(v.get("port"));
+    }
+}
+
+class SocketReadRequest extends BaseRequest {
+    Socket sock;
+    int bytes;
+
+    SocketReadRequest(String req) throws IOException {
+        super(req);
+        int sockID = Integer.parseInt(v.get("sock"));
+        sock = HelloController.getSocketFromID(sockID);
+        bytes = Integer.parseInt(v.get("bytes"));
+    }
+}
+
+class SocketWriteRequest extends BaseRequest {
+    Socket sock;
+    String data;
+
+    SocketWriteRequest(String req) throws IOException {
+        super(req);
+        int sockID = Integer.parseInt(v.get("sock"));
+        sock = HelloController.getSocketFromID(sockID);
+        data = v.get("data");
+    }
+}
+
+class SocketCloseRequest extends BaseRequest {
+    int sockID;
+    Socket sock;
+
+    SocketCloseRequest(String req) throws IOException {
+        super(req);
+        sockID = Integer.parseInt(v.get("sock"));
+        sock = HelloController.getSocketFromID(sockID);
+    }
+}
+
 class CommandLine {
     public static void main(String args[]) throws Exception {
         if (args[0].equals("up")) {
             clientUp(args[1], args[2], args[3]);   // copy from (local  args[2]) -> (remote args[3])
         } else if (args[0].equals("down")) {
             clientDown(args[1], args[2], args[3]); // copy from (remote args[2]) -> (local  args[3])
+        } else if (args[0].equals("sockopen")) {
+            clientSocketOpen(args[1], args[2], args[3], args[4]); // open args[2]:args[3] as localhost:args[4]
+        } else {
+            System.out.println("Unknown command: " + args[0]);
         }
     }
 
@@ -643,12 +787,16 @@ class CommandLine {
     }
 
 
+    // skipDir == skip this number of characters from the beginning of the path
     static void findAllFiles(StringBuilder sb, int skipDir, File file) throws Exception {
         if (file.isFile()) {
             String fileName = file.toString();
-            sb.append("&" + count + ".file=" + Util.encode(fileName.substring(skipDir)) +
-                      "&" + count + ".cksum=" + Util.crc32(fileName));
-            count ++;
+            String skippedFileName = fileName.substring(skipDir);
+            if (!skippedFileName.startsWith("build/")) {
+                sb.append("&" + count + ".file=" + Util.encode(skippedFileName) +
+                          "&" + count + ".cksum=" + Util.crc32(fileName));
+                count ++;
+            }
         } else if (file.isDirectory()) {
             File[] files = file.listFiles();
             Arrays.sort(files);
@@ -656,5 +804,159 @@ class CommandLine {
                 findAllFiles(sb, skipDir, f);
             }
         }
+    }
+
+    static void clientSocketOpen(String url, String proxiedHost, String proxiedPort, String localProxiedPort) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Util.pair("0.token", Util.token));
+        sb.append(Util.pair("&0.dir", "dummy"));
+        sb.append(Util.pair("&0.host", proxiedHost));
+        sb.append(Util.pair("&0.port", proxiedPort));
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url + "/sockopen"))
+            .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        String line = response.body();
+        String tmp[] = line.split(" ");
+        String sockID = tmp[0];
+        String total = tmp[1];
+
+        System.out.println("Server has total " + total + " connections");
+        System.out.println("Proxy listening on localhost: " + localProxiedPort);
+
+        ServerSocket serverSocket = new ServerSocket(Integer.parseInt(localProxiedPort));
+        Socket clientSocket = serverSocket.accept();
+        serverSocket.close();
+
+        System.out.println("Proxy accepted incoming connection: " + clientSocket);
+
+        SocketProxyReadThread readThread = new SocketProxyReadThread(url, sockID, clientSocket.getOutputStream());
+        readThread.start();
+
+        SocketProxyWriteThread writeThread = new SocketProxyWriteThread(url, sockID, clientSocket.getInputStream());
+        writeThread.start();
+
+        readThread.join();
+        writeThread.join();
+    }
+}
+
+// Reads from the server, and writes to the OutputStream of the proxied port
+class SocketProxyReadThread extends Thread {
+    String url;
+    String sockID;
+    OutputStream out;
+    SocketProxyReadThread(String url, String sockID, OutputStream out) {
+        this.url = url;
+        this.sockID = sockID;
+        this.out = out;
+    }
+
+    public void run() {
+        while (true) {
+            try {
+                readLoop();
+            } catch (Throwable t) {
+                t.printStackTrace();
+                System.out.println("Exiting due to exception");
+                System.exit(0);
+                return;
+            }
+        }
+    }
+
+    void readLoop() throws Exception {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Util.pair("0.token", Util.token));
+        sb.append(Util.pair("&0.dir", "dummy"));
+        sb.append(Util.pair("&0.sock", sockID));
+        sb.append(Util.pair("&0.bytes", "" + 1024 * 64));
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url + "/sockread"))
+            .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+            .build();
+
+        HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        byte[] body = response.body();
+        if (response.statusCode() == 404) { // HttpStatus.NOT_FOUND
+            System.out.println("Server has closed connection");
+            System.exit(0);
+        }
+        out.write(body);
+        out.flush();
+    }
+}
+
+// Reads incoming data from the InputStream of the proxies port, and upload to the server
+class SocketProxyWriteThread extends Thread {
+    String url;
+    String sockID;
+    InputStream in;
+    byte[] buffer = new byte[4096];
+    boolean eof;
+
+    SocketProxyWriteThread(String url, String sockID, InputStream in) {
+        this.url = url;
+        this.sockID = sockID;
+        this.in = in;
+        this.eof = false;
+    }
+
+    public void run() {
+        while (!eof) {
+            try {
+                writeLoop();
+            } catch (Throwable t) {
+                t.printStackTrace();
+                return;
+            }
+        }
+    }
+
+    void writeLoop() throws Exception {
+        int n = in.read(buffer);
+        if (n < 0) {
+            eof = true;
+            System.out.println("EOF -- closing socket in server side");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(Util.pair("0.token", Util.token));
+            sb.append(Util.pair("&0.dir", "dummy"));
+            sb.append(Util.pair("&0.sock", sockID));
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url + "/sockclose"))
+                .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+                .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.exit(0);
+        }
+
+        byte src[];
+        if (n == buffer.length) {
+            src = buffer;
+        } else {
+            src = new byte[n];
+            System.arraycopy(buffer, 0, src, 0, n);
+        }
+        String b64 = Base64.getEncoder().encodeToString(src);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(Util.pair("0.token", Util.token));
+        sb.append(Util.pair("&0.dir", "dummy"));
+        sb.append(Util.pair("&0.sock", sockID));
+        sb.append(Util.pair("&0.data", Util.encode(b64)));
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url + "/sockwrite"))
+            .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

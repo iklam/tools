@@ -4,15 +4,21 @@
 SRC = $(wildcard ./gs-spring-boot/complete/src/main/java/com/example/springboot/*.java) \
       $(wildcard ./gs-spring-boot/complete/src/main/resources/*)
 
+BIN = ./gs-spring-boot/complete/target/spring-boot-complete-0.0.1-SNAPSHOT.jar
+
 ifneq ($(MAVEN_HTTP_PROXY_HOST),)
   MVN_OPTS=-Dhttp.proxyHost=${MAVEN_HTTP_PROXY_HOST} -Dhttp.proxyPort=${MAVEN_HTTP_PROXY_PORT} \
     -Dhttps.proxyHost=${MAVEN_HTTPS_PROXY_HOST} -Dhttps.proxyPort=${MAVEN_HTTPS_PROXY_PORT}
 endif
 
-app: ${SRC}
+override GOODJAVAHOME = /jdk3/httpft_jdk
+
+$(BIN): ${SRC}
 	cd gs-spring-boot/complete && JAVA_HOME=${GOODJAVAHOME} mvn ${MVN_OPTS} -Dmaven.test.skip=true package
 
-TOKEN = -Dhttpft.token=${HTTPFT_TOKEN}
+app: $(BIN)
+
+TOKEN = -Dhttpft.token=${HTTPFT_TOKEN} -Dcom.sun.net.ssl.checkRevocation=false
 
 # Run with HTTPS (default)
 run:
@@ -63,11 +69,16 @@ clean:
 	rm -rf gs-spring-boot/complete/target springboot.p12
 
 
+# testing ....
+
 up:
 	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
 		up ${HTTPFT_SERVER} $(shell pwd)/../.git /tmp/testdiffup/.git
 
 down:
 	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
-		down ${HTTPFT_SERVER} $(shell pwd)/../.git /tmp/testdiffup/.git
+		down ${HTTPFT_SERVER} $(shell pwd) /tmp/testdiffup
 
+sockopen:
+	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
+		sockopen ${HTTPFT_SERVER} ${HTTPFT_PROXYED_HOST} ${HTTPFT_PROXYED_PORT} ${HTTPFT_PROXYED_LOCAL_PORT}
