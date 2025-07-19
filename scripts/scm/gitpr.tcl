@@ -5,6 +5,7 @@ proc get_pr_info {url} {
     regsub {/pull/[0-9]*/files} $root "" root
 
     regsub {.*data-range-url="[^>]*/[$]range"} $data "" data
+    regsub {.*data-range-url="[^>]*/[$]range"} $data "" data
     regsub {</details-menu>.*} $data "" data
 
     set commits {}
@@ -32,7 +33,7 @@ proc get_pr_info {url} {
         exit 1
     }
     set data [string trim $data]
-    if {![regexp {^<[^>]*href=\"[^>]*/([^/]+)\">} $data dummy parent]} {
+    if {![regexp {^<[^>]*href=\"[^>]*/([^/"]+)[^/]+\">} $data dummy parent]} {
         puts "Cannot find the parent of: $firsturl"
         exit 1
     }

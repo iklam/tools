@@ -7,6 +7,7 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -36,10 +37,20 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
+//import java.io.*;
+//import java.nio.*;
+//import java.nio.file.*;
+import java.security.*;
+import java.security.spec.*;
+import javax.crypto.*;
+import javax.crypto.spec.*;
+
+
 @RestController
 public class HelloController {
     static {
         System.out.println("token = " + Util.token);
+        System.out.println("key   = " + Crypto.secretKey);
     }
     @GetMapping("/")
     public String index() {
@@ -55,7 +66,7 @@ public class HelloController {
     // dir=<dir>&
     // file=<file>&cksum=<cksum>
     @RequestMapping(path = "/diffup", method = RequestMethod.POST)
-    public String diffup(@RequestBody String request) throws IOException {
+    public String diffup(@RequestBody String request) throws Exception {
         try {
             ChecksumRequest cksumReq = new ChecksumRequest(request);
             HashSet<String> clientFiles = new HashSet<>();
@@ -76,10 +87,10 @@ public class HelloController {
             int skipDir = cksumReq.dir.length() + 1;
             serverSideDelete(baseDir, skipDir, clientFiles);
 
-            return result.toString();
+            return Crypto.encrypt(result.toString());
         } catch (Throwable t) {
             t.printStackTrace();
-            return "error=" +  URLEncoder.encode(t.toString());
+            return Crypto.encrypt("error=" +  URLEncoder.encode(t.toString()));
         }
     }
 
@@ -126,7 +137,7 @@ public class HelloController {
     //
     // Each POST is limited to no more than 1MB of data
     @RequestMapping(path = "/up", method = RequestMethod.POST)
-    public String up(@RequestBody String request) throws IOException {
+    public String up(@RequestBody String request) throws Exception {
         UploadRequest req = new UploadRequest(request);
         File baseDir = new File(req.dir);
 
@@ -134,10 +145,10 @@ public class HelloController {
             serverSideUpdateFile(baseDir, fi);
         }
 
-        return "ok";
+        return Crypto.encrypt("ok");
     }
 
-    static void serverSideUpdateFile(File baseDir, FileInfo fi) throws IOException {
+    static void serverSideUpdateFile(File baseDir, FileInfo fi) throws Exception {
         File f = new File(baseDir, fi.file);
         Util.prepareDirectoryFor(f);
         boolean append = fi.offset > 0;
@@ -156,17 +167,18 @@ public class HelloController {
     //    - The response is a JAR file
     //    - a special file .delete.txt lists all the files that need to be deleted.
     @RequestMapping(path = "/down", produces = "application/zip", method = RequestMethod.POST)
-    public ResponseEntity<byte[]> serverDown(@RequestBody String request) throws IOException {
+    public ResponseEntity<byte[]> serverDown(@RequestBody String request) throws Exception {
         byte[] zip = makeDownZipFile(request);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF); // no APPLICATION_ZIP
         headers.setContentDispositionFormData("attachment", "x.zip");
+        zip = Crypto.encrypt(zip);
         headers.setContentLength(zip.length);
         return new ResponseEntity<byte[]>(zip, headers, HttpStatus.OK);
     }
 
-    byte[] makeDownZipFile(String request) throws IOException {
+    byte[] makeDownZipFile(String request) throws Exception {
         ChecksumRequest cksumReq = new ChecksumRequest(request);
         HashSet<String> clientFiles = new HashSet<>();
         HashSet<String> deleteFiles = new HashSet<>();
@@ -269,7 +281,7 @@ public class HelloController {
     // Client calls this first to ask the server to make a socket connection to the
     // specified host/port
     @RequestMapping(path = "/sockopen", method = RequestMethod.POST)
-    public String socketOpen(@RequestBody String request) throws IOException {
+    public String socketOpen(@RequestBody String request) throws Exception {
         SocketOpenRequest req = new SocketOpenRequest(request);
         Socket sock = new Socket(req.host, req.port);
 
@@ -292,13 +304,13 @@ public class HelloController {
             openSockets.put(Integer.valueOf(num), sock);
             allSockets.add(sock);
             System.out.println("Total opened sockets = " + openSockets.size() + "/" + allSockets.size());
-            return "" + num + " " +  allSockets.size();
+            return Crypto.encrypt("" + num + " " +  allSockets.size());
         }
     }
 
     // Client calls to read from a socket (should read at least one byte)
     @RequestMapping(path = "/sockread", method = RequestMethod.POST)
-    public ResponseEntity<byte[]> socketRead(@RequestBody String request) throws IOException {
+    public ResponseEntity<byte[]> socketRead(@RequestBody String request) throws Exception {
         SocketReadRequest req = new SocketReadRequest(request);
 
         HttpStatusCode status = HttpStatus.OK;
@@ -316,33 +328,40 @@ public class HelloController {
         if (n < 0) {
             n = 0;
         }
+        if (n != result.length) {
+            byte[] buf = new byte[n];
+            System.arraycopy(result, 0, buf, 0, n);
+            result = buf;
+        }
+        result = Crypto.encrypt(result);
+        //System.out.println("result.length = " + result.length);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        headers.setContentLength(n);
+        headers.setContentLength(result.length);
         return new ResponseEntity<byte[]>(result, headers, status);
     }
 
     // Client calls to write into a socket
     @RequestMapping(path = "/sockwrite", method = RequestMethod.POST)
-    public String socketWrite(@RequestBody String request) throws IOException {
+    public String socketWrite(@RequestBody String request) throws Exception {
         SocketWriteRequest req = new SocketWriteRequest(request);
         OutputStream out = req.sock.getOutputStream();
         String decoded = URLDecoder.decode(req.data, StandardCharsets.UTF_8.name());
         byte[] data = Base64.getDecoder().decode(decoded);
         out.write(data);
-        return "ok";
+        return Crypto.encrypt("ok");
     }
 
     // Client calls to close a socket
     @RequestMapping(path = "/sockclose", method = RequestMethod.POST)
-    public String socketClose(@RequestBody String request) throws IOException {
+    public String socketClose(@RequestBody String request) throws Exception {
         SocketCloseRequest req = new SocketCloseRequest(request);
         req.sock.close();
         synchronized (openSockets) {
             allSockets.remove(req.sock);
             openSockets.remove(Integer.valueOf(req.sockID));
         }
-        return "ok";
+        return Crypto.encrypt("ok");
     }
 
     static Socket getSocketFromID(int sockID) {
@@ -352,8 +371,205 @@ public class HelloController {
     }
 }
 
+
+class Crypto {
+    static SecretKey secretKey;
+
+    static {
+        try {
+            secretKey = init();
+        } catch (Throwable t) {
+            t.printStackTrace();
+            System.exit(1);
+        }
+    }
+
+    static SecretKey init() throws Exception {
+        KeyStore ks = KeyStore.getInstance("pkcs12");
+        ks.load(null, null);
+
+
+        String keyStorePath = System.getProperty("httpft.key.store");
+        if (keyStorePath == null) {
+            System.out.println("-Dhttpft.key.store must be specified");
+            System.exit(1);
+        }
+
+        char[] password = "keystorepassword".toCharArray();
+        KeyStore.ProtectionParameter protParam = 
+            new KeyStore.PasswordProtection(password);
+        
+        if ((new File(keyStorePath)).exists()) {
+            System.out.println("Loading from keystore: " + keyStorePath);
+            try (FileInputStream fis = new FileInputStream(keyStorePath)) {
+                ks.load(fis, null);
+            }
+
+            KeyStore.Entry ent = ks.getEntry("secretKeyAlias", protParam);
+            return ((KeyStore.SecretKeyEntry)ent).getSecretKey();
+        } else {
+            SecretKey sk = generateKey(256);
+            KeyStore.SecretKeyEntry skEntry = new KeyStore.SecretKeyEntry(sk);
+            ks.setEntry("secretKeyAlias", skEntry, protParam);
+
+            try (FileOutputStream fos = new FileOutputStream(keyStorePath)) {
+                ks.store(fos, null);
+            }
+
+            System.out.println("\n\n\n\n\n\n");
+            System.out.println("Created new keystore: " + keyStorePath);
+            System.out.println("\n\n\n\n\n\n");
+            return sk;
+        }
+    }
+
+    static GCMParameterSpec gcmSpec = generateIv();
+    static String algorithm = "AES/GCM/NoPadding";
+
+    public static GCMParameterSpec generateIv() {
+        byte[] iv = Util.token.getBytes();
+        return new GCMParameterSpec(128, iv);
+    }
+
+    public static String encrypt(String input, SecretKey key)
+        throws NoSuchPaddingException, NoSuchAlgorithmException,
+               InvalidAlgorithmParameterException, InvalidKeyException,
+               BadPaddingException, IllegalBlockSizeException
+    {
+
+        Cipher cipher = Cipher.getInstance(algorithm);
+        cipher.init(Cipher.ENCRYPT_MODE, key, gcmSpec);
+        byte[] cipherText = cipher.doFinal(input.getBytes());
+        return Base64.getEncoder()
+            .encodeToString(cipherText);
+    }
+
+    public static String decrypt(String cipherText, SecretKey key)
+        throws NoSuchPaddingException, NoSuchAlgorithmException,
+               InvalidAlgorithmParameterException, InvalidKeyException,
+               BadPaddingException, IllegalBlockSizeException
+    {
+        Cipher cipher = Cipher.getInstance(algorithm);
+        cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec);
+        byte[] plainText = cipher.doFinal(Base64.getDecoder()
+                                          .decode(cipherText));
+        return new String(plainText);
+    }
+
+
+    public static String encrypt(String s) throws Exception {
+        return encrypt(s, secretKey);
+    }
+
+    public static String decrypt(String s) throws Exception {
+        return decrypt(s, secretKey);
+    }
+
+
+    public static byte[] encrypt(byte[] input, SecretKey key)
+        throws NoSuchPaddingException, NoSuchAlgorithmException,
+               InvalidAlgorithmParameterException, InvalidKeyException,
+               BadPaddingException, IllegalBlockSizeException
+    {
+
+        Cipher cipher = Cipher.getInstance(algorithm);
+        cipher.init(Cipher.ENCRYPT_MODE, key, gcmSpec);
+        return cipher.doFinal(input);
+    }
+
+    public static byte[] decrypt(byte[] cipherText, SecretKey key)
+        throws NoSuchPaddingException, NoSuchAlgorithmException,
+               InvalidAlgorithmParameterException, InvalidKeyException,
+               BadPaddingException, IllegalBlockSizeException
+    {
+        Cipher cipher = Cipher.getInstance(algorithm);
+        cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec);
+        return cipher.doFinal(cipherText);
+    }
+
+
+    public static byte[] encrypt(byte[] s) throws Exception {
+        return encrypt(s, secretKey);
+    }
+
+    public static byte[] decrypt(byte[] s) throws Exception {
+        return decrypt(s, secretKey);
+    }
+
+    public static SecretKey generateKey(int n) throws NoSuchAlgorithmException {
+        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+        keyGenerator.init(n);
+        SecretKey key = keyGenerator.generateKey();
+        return key;
+    }
+
+/*
+    static PublicKey publicKey;
+    static PrivateKey privateKey;
+
+    static {
+        try {
+            publicKey = readPublicKey("/tmp/public.der");
+            privateKey = readPrivateKey("/tmp/private.der");
+        } catch (Throwable t) {
+            t.printStackTrace();
+            System.exit(1);
+        }
+    }
+
+    private static byte[] readFileBytes(String filename) throws IOException {
+        Path path = Paths.get(filename);
+        return Files.readAllBytes(path);        
+    }
+
+    private static PublicKey readPublicKey(String filename)
+        throws IOException, NoSuchAlgorithmException, InvalidKeySpecException
+    {
+        X509EncodedKeySpec publicSpec = new X509EncodedKeySpec(readFileBytes(filename));
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        return keyFactory.generatePublic(publicSpec);       
+    }
+
+    private static PrivateKey readPrivateKey(String filename) 
+        throws IOException, NoSuchAlgorithmException, InvalidKeySpecException
+    {
+        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(readFileBytes(filename));
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        return keyFactory.generatePrivate(keySpec);     
+    }
+
+
+    private static byte[] encrypt(PublicKey key, byte[] plaintext)
+        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException
+    {
+        Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA1AndMGF1Padding");   
+        cipher.init(Cipher.ENCRYPT_MODE, key);  
+        return cipher.doFinal(plaintext);
+    }
+
+    private static byte[] decrypt(PrivateKey key, byte[] ciphertext)
+        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException
+    {
+        Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA1AndMGF1Padding");   
+        cipher.init(Cipher.DECRYPT_MODE, key);  
+        return cipher.doFinal(ciphertext);
+    }
+
+*/
+
+}
+
 class Util {
     static final String token;
+
+    static HttpRequest.BodyPublisher encryptPostString(String postString) throws Exception {
+        String e = Crypto.encrypt(postString);
+        return HttpRequest.BodyPublishers.ofString(e);
+    }
+
+    static HttpRequest.BodyPublisher encryptPostString(StringBuilder sb) throws Exception {
+        return encryptPostString(sb.toString());
+    }
 
     static {
         try {
@@ -365,7 +581,8 @@ class Util {
         }
     }
 
-    static Values split(String req) throws IOException {
+    static Values decryptAndSplit(String req) throws Exception {
+        req = Crypto.decrypt(req);
 	//System.out.println("\n" + req + "\n");
         String tmp[] = req.split("&");
         String data[] = new String[tmp.length * 2];
@@ -501,8 +718,8 @@ class BaseRequest {
     ArrayList<FileInfo> files = new ArrayList<>();
     Values v;
 
-    BaseRequest(String req) throws IOException {
-        v = Util.split(req);
+    BaseRequest(String req) throws Exception {
+        v = Util.decryptAndSplit(req);
         String token = v.get("token");
         if (!token.equals(Util.token)) {
             throw new RuntimeException("Token not equal: " + token);
@@ -512,7 +729,7 @@ class BaseRequest {
 }
 
 class ChecksumRequest extends BaseRequest {
-    ChecksumRequest(String req) throws IOException {
+    ChecksumRequest(String req) throws Exception {
         super(req);
 
         while (!v.end()) {
@@ -524,7 +741,7 @@ class ChecksumRequest extends BaseRequest {
 }
 
 class UploadRequest extends BaseRequest {
-    UploadRequest(String req) throws IOException {
+    UploadRequest(String req) throws Exception {
         super(req);
 
         while (!v.end()) {
@@ -542,7 +759,7 @@ class SocketOpenRequest extends BaseRequest {
     String host;
     int port;
 
-    SocketOpenRequest(String req) throws IOException {
+    SocketOpenRequest(String req) throws Exception {
         super(req);
         host = v.get("host");
         port = Integer.parseInt(v.get("port"));
@@ -553,7 +770,7 @@ class SocketReadRequest extends BaseRequest {
     Socket sock;
     int bytes;
 
-    SocketReadRequest(String req) throws IOException {
+    SocketReadRequest(String req) throws Exception {
         super(req);
         int sockID = Integer.parseInt(v.get("sock"));
         sock = HelloController.getSocketFromID(sockID);
@@ -565,7 +782,7 @@ class SocketWriteRequest extends BaseRequest {
     Socket sock;
     String data;
 
-    SocketWriteRequest(String req) throws IOException {
+    SocketWriteRequest(String req) throws Exception {
         super(req);
         int sockID = Integer.parseInt(v.get("sock"));
         sock = HelloController.getSocketFromID(sockID);
@@ -577,7 +794,7 @@ class SocketCloseRequest extends BaseRequest {
     int sockID;
     Socket sock;
 
-    SocketCloseRequest(String req) throws IOException {
+    SocketCloseRequest(String req) throws Exception {
         super(req);
         sockID = Integer.parseInt(v.get("sock"));
         sock = HelloController.getSocketFromID(sockID);
@@ -602,11 +819,10 @@ class CommandLine {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url + "/diffup"))
-            .POST(HttpRequest.BodyPublishers.ofString(post))
+            .POST(Util.encryptPostString(post))
             .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
         upload(response.body(), url, localDir, remoteDir);
     }
 
@@ -615,11 +831,11 @@ class CommandLine {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url + "/down"))
-            .POST(HttpRequest.BodyPublishers.ofString(post))
+            .POST(Util.encryptPostString(post))
             .build();
 
         HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        byte[] body = response.body();
+        byte[] body = Crypto.decrypt(response.body());
         byte[] buffer = new byte[2048];
 
         int i = 0;
@@ -704,7 +920,7 @@ class CommandLine {
     }
 
     static void upload(String response, String url, String localDir, String remoteDir) throws Exception {
-        Values v = Util.split(response);
+        Values v = Util.decryptAndSplit(response);
         String status = v.get("status");
         if (!status.equals("ok")) {
             throw new RuntimeException("Status is not ok = " + status);
@@ -765,12 +981,13 @@ class CommandLine {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url + "/up"))
-                .POST(HttpRequest.BodyPublishers.ofString(post))
+                .POST(Util.encryptPostString(post))
                 .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (!response.body().equals("ok")) {
-                throw new RuntimeException("Status is not ok = " + response.body());
+            String body = Crypto.decrypt(response.body());
+            if (!body.equals("ok")) {
+                throw new RuntimeException("Status is not ok = " + body);
             }
             count = 0;
             return newUploadChunk(remoteDir);
@@ -815,11 +1032,11 @@ class CommandLine {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url + "/sockopen"))
-            .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+            .POST(Util.encryptPostString(sb))
             .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        String line = response.body();
+        String line = Crypto.decrypt(response.body());
         String tmp[] = line.split(" ");
         String sockID = tmp[0];
         String total = tmp[1];
@@ -877,15 +1094,17 @@ class SocketProxyReadThread extends Thread {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url + "/sockread"))
-            .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+            .POST(Util.encryptPostString(sb))
             .build();
 
         HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        byte[] body = response.body();
         if (response.statusCode() == 404) { // HttpStatus.NOT_FOUND
             System.out.println("Server has closed connection");
             System.exit(0);
         }
+        System.out.println(response.body().length);
+        byte[] body = Crypto.decrypt(response.body());
+
         out.write(body);
         out.flush();
     }
@@ -930,7 +1149,7 @@ class SocketProxyWriteThread extends Thread {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url + "/sockclose"))
-                .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+                .POST(Util.encryptPostString(sb))
                 .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -954,7 +1173,7 @@ class SocketProxyWriteThread extends Thread {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url + "/sockwrite"))
-            .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
+            .POST(Util.encryptPostString(sb))
             .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());

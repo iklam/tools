@@ -119,7 +119,7 @@ proc activate {id} {
             lappend times $last_used($i)
         }
         set times [lsort -integer -decreasing $times]
-        puts $times
+        #puts $times
         set out [lindex $times $max]
         foreach i $names {
             if {$last_used($i) <= $out} {

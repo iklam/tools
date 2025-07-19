@@ -18,7 +18,7 @@ $(BIN): ${SRC}
 
 app: $(BIN)
 
-TOKEN = -Dhttpft.token=${HTTPFT_TOKEN} -Dcom.sun.net.ssl.checkRevocation=false
+TOKEN = -Dhttpft.token=${HTTPFT_TOKEN} -Dcom.sun.net.ssl.checkRevocation=false -Dhttpft.key.store=${HOME}/httpft.ks
 
 # Run with HTTPS (default)
 run:
@@ -53,7 +53,7 @@ key:
 	@if ! test -f "${HTTPFT_CERT}"; then echo invalid HTTPFT_CERT; exit 1; fi
 	@if ! test -f "${HTTPFT_KEY}"; then echo invalid HTTPFT_KEY; exit 1; fi
 	rm -f springboot.p12
-	openssl pkcs12 -export -name springboot -in ${HTTPFT_CERT} -inkey ${HTTPFT_KEY}.pem -out springboot.p12 -password pass:password
+	openssl pkcs12 -export -name springboot -in ${HTTPFT_CERT} -inkey ${HTTPFT_KEY} -out springboot.p12 -password pass:password
 
 # I have version 7d77ad35767ff76f0a8f670a2ecd532083917dcc
 ___git:
@@ -73,11 +73,11 @@ clean:
 
 up:
 	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
-		up ${HTTPFT_SERVER} $(shell pwd)/../.git /tmp/testdiffup/.git
+		up ${HTTPFT_SERVER} /tmp/testdiffdown /tmp/testdiffup 
 
 down:
 	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
-		down ${HTTPFT_SERVER} $(shell pwd) /tmp/testdiffup
+		down ${HTTPFT_SERVER} $(shell pwd) /tmp/testdiffdown
 
 sockopen:
 	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
