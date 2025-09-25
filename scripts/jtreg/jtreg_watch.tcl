@@ -166,6 +166,7 @@ proc doit {args} {
         set test_elapsed "     "
     }
     set skip 0
+    set tail ""
 
     if {$time - $last_report_time > 10 && ![info exists updating_report]} {
         update_report 0
@@ -220,6 +221,7 @@ proc doit {args} {
         append line "      <============="
     } elseif {[regexp {^Results written } $line]} {
         set test_elapsed [clock format [expr $time - $end_test_time] -format %M:%S]
+        set tail " @ [clock format [clock seconds]]"
     }
 
     set id 0
@@ -228,7 +230,7 @@ proc doit {args} {
     set numrun [llength [array size running]]
     set elapsed [clock format [expr $time - $start] -format %M:%S]
     if {!$skip} {
-        puts [format {%s %s [%3d %3d %3d %3d] %s %s} $id $elapsed $numfailed $numerror $numpassed $numfinish $test_elapsed $line]
+        puts [format {%s %s [%3d %3d %3d %3d] %s %s%s} $id $elapsed $numfailed $numerror $numpassed $numfinish $test_elapsed $line $tail]
         if {"$test_elapsed" != ""} {
             set test_elapsed "     "
         }

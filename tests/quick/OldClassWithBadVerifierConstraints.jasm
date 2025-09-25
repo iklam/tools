@@ -1,0 +1,23 @@
+super public class OldClassWithBadVerifierConstraints
+	version 49:0
+{
+
+
+public Method "<init>":"()V"
+	stack 1 locals 1
+{
+		aload_0;
+		invokespecial	Method java/lang/Object."<init>":"()V";
+		return;
+}
+
+static Method get_Event_from_MyEvent:"()Ljdk/jfr/Event;"
+	stack 2 locals 0
+{
+		new	class MyEvent;
+		dup;
+		invokespecial	Method MyEvent."<init>":"()V";
+		areturn;
+}
+
+}

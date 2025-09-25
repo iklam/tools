@@ -79,6 +79,7 @@ proc update {args} {
 
         }
     }
+    update_button_colors
     wm geometry . +0+25
     wm geometry .bottom +0-25
 
@@ -196,6 +197,63 @@ proc set_desktop {n} {
     exec xdotool set_desktop $n
 }
 
+proc get_last_active_term {} {
+    set id ""
+    catch {
+        set fd [open /tmp/autoraise-active-term]
+        set line [gets $fd]
+        set line [gets $fd]
+        set id   [lindex $line 0]
+        close $fd
+    }
+    return $id
+}
+
+proc track_last_raised_terms {} {
+    global last_raised recent_raised
+
+    set id [get_last_active_term]
+    if {$id != "" && $id != $last_raised} {
+        for {set i 1} {$i <= 4} {incr i} {
+            if {[info exists recent_raised($i)] && $recent_raised($i) == $id} {
+                break
+            }
+        }
+        for {} {$i >= 1} {incr i -1} {
+            catch {
+                set recent_raised($i) $recent_raised([expr $i - 1])
+            }
+        }
+        set recent_raised(0) $id
+        set last_raised $id
+        #puts ""
+        #parray recent_raised
+        update_button_colors
+    }
+
+    after 200 track_last_raised_terms
+}
+
+proc update_button_colors {} {
+    global recent_raised
+
+    foreach button [winfo children .] {
+        if {[regexp {^.0x} $button]} {
+            $button config -bg #d9d9d9 -activebackground #e9e9e9
+        }
+    }
+
+    for {set i 4} {$i >= 0} {incr i -1} {
+        if {[info exists recent_raised($i)]} {
+            set button .$recent_raised($i)
+            regsub "0x0*" $button 0x button
+            set color [expr 0xff - [expr $i * 25]]
+            set color #[format %02x $color]8989
+            catch {$button config -bg $color -activebackground $color}
+        }
+    }
+}
+
 proc make_ui {} {
     wm overrideredirect . true
     wm geometry . +0-0
@@ -211,6 +269,11 @@ proc make_ui {} {
     wm geometry .bottom +0-0
 }
 
+# The last one that was "activated" by TK buttons
 set last_activated ""
+
+# The last one that was raised (by TK buttons, or by the OS's Window Manager
+set last_raised ""
 make_ui
 update
+track_last_raised_terms

@@ -57,7 +57,7 @@ set focused_terminal_wid -1
 set count 0
 proc update_focused_terminal {} {
     global terminal_pid focused_terminal_wid count
-    after 500 update_focused_terminal
+    after 250 update_focused_terminal
     incr count
     set fd [open "|wmctrl -l -p"]
     set list {}

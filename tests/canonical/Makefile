@@ -19,15 +19,19 @@ define build
 	rm -rf tmp
 	mkdir -p tmp
 	${JAVAC} -d tmp $1.java
-	${JAR} cvf $1.jar -C tmp .
+	if test "$2" = ""; then \
+	    ${JAR} cvf $1.jar -C tmp .; \
+	else \
+	    ${JAR} cvmf $2 $1.jar -C tmp .; \
+	fi
 	mkdir -p classes
 	mv tmp/* classes
 	rm -rf tmp
 endef
 
 
-HelloWorld.jar: HelloWorld.java
-	$(call build,HelloWorld)
+HelloWorld.jar: HelloWorld.java HelloWorld.manifest
+	$(call build,HelloWorld,HelloWorld.manifest)
 
 Lambda0.jar: Lambda0.java
 	$(call build,Lambda0)

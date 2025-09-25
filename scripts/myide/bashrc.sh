@@ -368,6 +368,14 @@ function cdsrun () {
             # Preload 3 = re-train with an existing AOT cache
             cmd="$cmd -XX:AOTMode=record -XX:AOTConfiguration=$testname.aotconfig -XX:AOTCache=$testname.aot"
             ;;
+        dynamic0)
+            # Dynamic 0 = old dynamic workflow : dump dynamic archive
+            cmd="$cmd -XX:ArchiveClassesAtExit=$testname.d.jsa"
+            ;;
+        dynamic1)
+            # Dynamic 1 = old dynamic workflow: run with dynamic archive
+            cmd="$cmd -XX:SharedArchiveFile=$testname.d.jsa"
+            ;;
         dpreload0)
             # Dynamic Preload 0 = old dynamic workflow with class preloading: dump dynamic archive
             cmd="$cmd -XX:+AOTClassLinking -XX:ArchiveClassesAtExit=$testname.dp.jsa"
@@ -426,6 +434,10 @@ function cdsrun-define () {
     alias ${testname}p2="$run preload2"
     alias ${testname}p3="$run preload3"
 
+    # Dynamic
+    alias ${testname}d0="$run dynamic0"
+    alias ${testname}d1="$run dynamic1"
+
     # Preloaded (dynamic)
     alias ${testname}dp0="$run dpreload0"
     alias ${testname}dp1="$run dpreload1"
@@ -441,18 +453,19 @@ cdsrun-define vv "" --version
 cdsrun-define hw ~/tmp/HelloWorld.jar HelloWorld
 cdsrun-define hc ~/tmp/HelloCustom.jar HelloCustom
 cdsrun-define hl ~/tmp/HelloLambda.jar HelloLambda
+cdsrun-define lm ~/tmp/LambdaMisc.jar LambdaMisc
 cdsrun-define mh ~/tmp/HelloMH.jar HelloMH
+cdsrun-define mu ~/tmp/MathUtilsTest.jar MathUtilsTest
+cdsrun-define nc ~/tmp/NumberCacheTest.jar NumberCacheTest
 cdsrun-define st ~/tmp/StreamTest.jar StreamTest
 cdsrun-define pd ~/tmp/PDTest.jar PDTest
 cdsrun-define pl ~/tmp/PreloadTest.jar PreloadTest
 cdsrun-define pk ~/tmp/PkgTest.jar test.pkg.PkgTest
 cdsrun-define xx ~/tmp/jdk-8290417/test.jar Test
 cdsrun-define mt ~/tmp/MyTest.jar MyTest
+cdsrun-define oc ~/tmp/OldClass.jar OldClass
 cdsrun-define pk ~/tmp/PackageTest.jar test.pkg.PackageTest
 cdsrun-define md "" "-p ${HOME}/tmp/modules/ioi/app.jar:${HOME}/tmp/modules/ioi/dir -m app/app.Main"
 cdsrun-define jc "" "com.sun.tools.javac.Main -d . ~/tmp/HelloWorld.java"
 cdsrun-define ss $TESTBED/demo/jfc/SwingSet2/SwingSet2.jar SwingSet2
-
-
-
-
+cdsrun-define rxc ~/tmp/ReflectExcludedClass.jar ReflectExcludedClass

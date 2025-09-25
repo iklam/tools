@@ -1,0 +1,23 @@
+super public class OldClassWithVerifierConstraints
+	version 49:0
+{
+
+
+public Method "<init>":"()V"
+	stack 1 locals 1
+{
+		aload_0;
+		invokespecial	Method java/lang/Object."<init>":"()V";
+		return;
+}
+
+static Method get_OldA_from_NewB:"()LOldA;"
+	stack 2 locals 0
+{
+		new	class NewB;
+		dup;
+		invokespecial	Method NewB."<init>":"()V";
+		areturn;
+}
+
+}
