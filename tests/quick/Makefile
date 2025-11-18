@@ -24,6 +24,8 @@ endef
 ALL_JARS = \
     CharsetTest.jar \
     HelloWorld.jar \
+    JavacBench2.jar \
+    JavacHelloWorld.jar \
     LambdaMisc.jar \
     MathUtilsTest.jar \
     NumberCacheTest.jar \
@@ -36,8 +38,11 @@ all: ${ALL_JARS}
 CharsetTest.jar: CharsetTest.java
 	$(call QuickBuild, CharsetTest)
 
-HelloWorld.jar: HelloWorld.java
-	$(call QuickBuild, HelloWorld)
+JavacBench2.jar: JavacBench2.java
+	$(call QuickBuild, JavacBench2)
+
+JavacHelloWorld.jar: JavacHelloWorld.java
+	$(call QuickBuild, JavacHelloWorld)
 
 LambdaMisc.jar: LambdaMisc.java
 	$(call QuickBuild, LambdaMisc)
