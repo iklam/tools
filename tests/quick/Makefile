@@ -23,11 +23,13 @@ endef
 
 ALL_JARS = \
     CharsetTest.jar \
+    CodeSourceTest.jar \
     HelloWorld.jar \
     JavacBench2.jar \
     JavacHelloWorld.jar \
     LambdaMisc.jar \
     MathUtilsTest.jar \
+    MySysLoader.jar \
     NumberCacheTest.jar \
     OldClass.jar \
     ReflectExcludedClass.jar
@@ -38,8 +40,14 @@ all: ${ALL_JARS}
 CharsetTest.jar: CharsetTest.java
 	$(call QuickBuild, CharsetTest)
 
+CodeSourceTest.jar: CodeSourceTest.java
+	$(call QuickBuild, CodeSourceTest)
+
 JavacBench2.jar: JavacBench2.java
 	$(call QuickBuild, JavacBench2)
+
+HelloWorld.jar: HelloWorld.java
+	$(call QuickBuild, HelloWorld)
 
 JavacHelloWorld.jar: JavacHelloWorld.java
 	$(call QuickBuild, JavacHelloWorld)
@@ -49,6 +57,9 @@ LambdaMisc.jar: LambdaMisc.java
 
 MathUtilsTest.jar: MathUtilsTest.java
 	$(call QuickBuild, MathUtilsTest)
+
+MySysLoader.jar: MySysLoader.java
+	$(call QuickBuild, MySysLoader)
 
 NumberCacheTest.jar: NumberCacheTest.java
 	$(call QuickBuild, NumberCacheTest)
@@ -63,4 +74,4 @@ ReflectExcludedClass.jar: ReflectExcludedClass.java
 	$(call QuickBuild, ReflectExcludedClass)
 
 clean:
-	rm -rf *~ ${ALL_JARS} tmpclasses
+	rm -rf *~ ${ALL_JARS} tmpclasses *.aot *.aot.config *.aotconfig *.class

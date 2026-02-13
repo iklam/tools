@@ -446,6 +446,11 @@ public class JavacBench2 {
             loops = Integer.parseInt(args[1]);
         }
 
+        boolean sleep = false;
+        if (args.length > 2 && args[2].equals("sleep")) {
+            sleep = true;
+        }
+
         long[] elapsed = new long[loops];
 
         run(files, loops, elapsed);
@@ -459,6 +464,12 @@ public class JavacBench2 {
                 System.out.format(" %6.3f files per ms", files / ms);
             }
             System.out.println();
+        }
+
+        if (sleep) {
+            // For memory size measurement.
+            System.out.println("sleeping ...");
+            Thread.sleep(1000000);
         }
     }
 
