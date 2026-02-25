@@ -11,7 +11,11 @@ ifneq ($(MAVEN_HTTP_PROXY_HOST),)
     -Dhttps.proxyHost=${MAVEN_HTTPS_PROXY_HOST} -Dhttps.proxyPort=${MAVEN_HTTPS_PROXY_PORT}
 endif
 
+# This is special JDK used for client
 override GOODJAVAHOME = /jdk3/httpft_jdk
+
+# Use this for the server
+override SERVER_JAVA =  /jdk3/httpft_jdk_server
 
 $(BIN): ${SRC}
 	cd gs-spring-boot/complete && JAVA_HOME=${GOODJAVAHOME} mvn ${MVN_OPTS} -Dmaven.test.skip=true package
@@ -22,7 +26,7 @@ TOKEN = -Dhttpft.token=${HTTPFT_TOKEN} -Dcom.sun.net.ssl.checkRevocation=false -
 
 # Run with HTTPS (default)
 run:
-	${GOODJAVAHOME}/bin/java \
+	${SERVER_JAVA}/bin/java \
 	    -Dspring.output.ansi.enabled=NEVER \
 	    -Dserver.port=8443 \
 	    -Dserver.address=0.0.0.0 \
@@ -82,3 +86,22 @@ down:
 sockopen:
 	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
 		sockopen ${HTTPFT_SERVER} ${HTTPFT_PROXYED_HOST} ${HTTPFT_PROXYED_PORT} ${HTTPFT_PROXYED_LOCAL_PORT}
+upbig:
+	rm -rf /tmp/updst
+	rm -rf /tmp/upsrc
+	mkdir /tmp/updst /tmp/upsrc
+	bash -c 'for i in {1..20}; do cp /jdk3/sync/jtreg7.5.2.tar.gz /tmp/upsrc/$$i; done'
+	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
+		up ${HTTPFT_SERVER} /tmp/upsrc /tmp/updst
+
+upbig0:
+	rm -rf /tmp/updst
+	rm -rf /tmp/upsrc
+	mkdir /tmp/updst /tmp/upsrc
+	bash -c 'for i in {1..20}; do cp /jdk3/sync/jtreg7.5.2.tar.gz /tmp/upsrc/$$i; done'
+	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
+		up http://localhost:8443 /tmp/upsrc /tmp/updst
+
+testdecrypt:
+	${GOODJAVAHOME}/bin/java ${TOKEN} -cp ./gs-spring-boot/complete/target/classes com.example.springboot.CommandLine \
+		testdecrypt

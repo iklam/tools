@@ -138,6 +138,19 @@ public class HelloController {
     // Each POST is limited to no more than 1MB of data
     @RequestMapping(path = "/up", method = RequestMethod.POST)
     public String up(@RequestBody String request) throws Exception {
+        try {
+            return up0(request);
+        } catch (Exception e) {
+            System.out.println("Error in up0:");
+            System.out.println("request.length() = " + request.length());
+            try (FileWriter fw = new FileWriter("/tmp/httpft-lastfailed")) {
+                fw.write(request);
+            }
+            throw e;
+        }
+    }
+
+    public String up0(@RequestBody String request) throws Exception {
         UploadRequest req = new UploadRequest(request);
         File baseDir = new File(req.dir);
 
@@ -445,6 +458,22 @@ class Crypto {
     }
 
     public static String decrypt(String cipherText, SecretKey key)
+        throws Exception
+    {
+        try {
+            return decrypt0(cipherText, key);
+        } catch (Exception e) {
+            System.out.println("Decrypt error?? " + cipherText.length());
+            try (FileWriter fw = new FileWriter("/tmp/httpft-lastfailed2")) {
+                fw.write("Hello");
+                fw.write("cipherText.length() = " + cipherText.length());
+                fw.write(cipherText);
+            }
+            throw e;
+        }
+    }
+
+    public static String decrypt0(String cipherText, SecretKey key)
         throws NoSuchPaddingException, NoSuchAlgorithmException,
                InvalidAlgorithmParameterException, InvalidKeyException,
                BadPaddingException, IllegalBlockSizeException
@@ -809,10 +838,24 @@ class CommandLine {
             clientDown(args[1], args[2], args[3]); // copy from (remote args[2]) -> (local  args[3])
         } else if (args[0].equals("sockopen")) {
             clientSocketOpen(args[1], args[2], args[3], args[4]); // open args[2]:args[3] as localhost:args[4]
+        } else if (args[0].equals("testdecrypt")) {
+            testDecrypt();
         } else {
             System.out.println("Unknown command: " + args[0]);
         }
     }
+
+    static void testDecrypt() throws Exception {
+        BufferedReader br = new BufferedReader(new FileReader("/tmp/httpft-lastfailed"));
+        String line = br.readLine();
+        for (;;) {
+            System.out.println("Line = " + line.length());
+            String dec = Crypto.decrypt(line);
+            System.out.println("Dec = " + dec.length());
+            System.out.println("OK");
+        }
+    }
+
 
     static void clientUp(String url, String localDir, String remoteDir) throws Exception {
         String post = postString(localDir, remoteDir);
@@ -919,7 +962,20 @@ class CommandLine {
         return sb.toString();
     }
 
+    // This is the client side uploading files
     static void upload(String response, String url, String localDir, String remoteDir) throws Exception {
+        try {
+            upload0(response, url, localDir, remoteDir);
+        } catch (Exception e) {
+            System.out.println("Error in upload0:");
+            System.out.println("response = " + response);
+            System.out.println("url = " + url);
+            System.out.println("localDir = " + localDir);
+            System.out.println("remoteDir = " + remoteDir);
+        }
+    }
+    static void upload0(String response, String url, String localDir, String remoteDir) throws Exception {
+
         Values v = Util.decryptAndSplit(response);
         String status = v.get("status");
         if (!status.equals("ok")) {
@@ -974,7 +1030,7 @@ class CommandLine {
         return start + n;
     }
 
-    static final int CHUNK_LIMIT = 5 * 1024 * 1024;
+    static final int CHUNK_LIMIT = 1 * 1024 * 1024;
     static StringBuilder flushChunk(String url, String remoteDir, StringBuilder sb, boolean force) throws Exception { 
         if (sb.length() >= CHUNK_LIMIT || force) {
             String post = sb.toString();
