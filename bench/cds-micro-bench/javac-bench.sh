@@ -70,7 +70,7 @@ for loop in $(seq 1 $loops); do
     for i in 1 2; do   
         true ========================================$loop.$i
         setvars $i
-        perf stat -r $repeat $JAVAC -J-Xshare:on -J-XX:SharedArchiveFile=$JSA $HELLO_WORLD_JAVA 2>&1
+        perf stat -r $repeat $JAVA -Xshare:on -XX:SharedArchiveFile=$JSA com.sun.tools.javac.Main $HELLO_WORLD_JAVA 2>&1
     done
 done
 

@@ -66,14 +66,22 @@ fi
 function setvars () {
     if test "$1" = 1; then
         export JAVA=$JDK1/bin/java
-        export JSA=jdk1.jsa
+        if test "$USE_DEFAULT_JSA" != ""; then
+            export JSA=$JDK1/lib/server/classes.jsa
+        else
+            export JSA=jdk1.jsa
+        fi
     else
         export JAVA=$JDK2/bin/java
-        export JSA=jdk2.jsa
+        if test "$USE_DEFAULT_JSA" != ""; then
+            export JSA=$JDK2/lib/server/classes.jsa
+        else
+            export JSA=jdk2.jsa
+        fi
     fi
 }
 
-if test "$NODUMP" != "true"; then
+if test "$NODUMP" != "true" -a "$USE_DEFAULT_JSA" = ""; then
     for i in 1 2; do
         setvars $i
         $JAVA -Xshare:dump -XX:SharedArchiveFile=$JSA

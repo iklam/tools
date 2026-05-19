@@ -17,13 +17,16 @@ set row 0
 set c 0
 while {![eof stdin]} {
     set line [gets stdin]
-    if {[regexp {([0-9,]+) +instructions} $line dummy instr]} {
+    if {[regexp {([0-9,]+) +instructions} $line dummy instr] ||
+        [regexp {([0-9,]+) +cpu_core/instructions} $line dummy instr]  } {
         regsub -all , $instr "" instr
         set i($c) $instr
         #puts $instr
-    } elseif {[regexp {^ *([0-9.]+) .*seconds time elapsed } $line dummy elapsed]} {
-        #puts $elapsed--$line
+    } elseif {[regexp {^ *([0-9.]+) .*seconds time elapsed .* ([0-9.]+)%} $line dummy elapsed stdev]} {
+        #puts $elapsed--$stdev--$line
         set e($c) [expr $elapsed * 1000]
+        set s($c) $stdev
+        lappend slist($c) $stdev
         incr c
         set out ""
         if {$c >= $compares_num} {
@@ -34,6 +37,9 @@ while {![eof stdin]} {
             for {set x 0} {$x < $c} {incr x} {
                 append out [format %.3f $e($x)],
                 set all($row,[expr $x + $compares_num]) $e($x)
+            }
+            for {set x 0} {$x < $c} {incr x} {
+                append out +-[format %.2f $s($x)]%,
             }
             if {$csv} {
                 puts $out
@@ -175,6 +181,10 @@ for {set r 0} {$r <= $row} {incr r} {
     }
 }
 
+foreach c {0 1} {
+    set mean_stdev($c) [gmean $slist($c)]
+}
+
 if {$compares_num == 2 && $row > 0} {
     set int_delta  [expr int($all($row,1) - $all($row,0))]
     set int_perc   [expr $int_delta / $all($row,0) * 100]
@@ -182,5 +192,5 @@ if {$compares_num == 2 && $row > 0} {
     set time_perc  [expr $time_delta / $all($row,2) * 100]
 
     puts "instr delta = [format {%12d    %7.4f%%} $int_delta $int_perc]"
-    puts "time  delta = [format {%12.3f ms %7.4f%%} $time_delta $time_perc]"
+    puts "time  delta = [format {%12.3f ms %7.4f%% (+-%.2f%% vs +-%.2f%%)} $time_delta $time_perc $mean_stdev(0) $mean_stdev(1)]"
 }
