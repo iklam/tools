@@ -39,6 +39,7 @@ fi
 HELLO_WORLD_JAVA=Bench_HelloWorld.java
 
 cat > $HELLO_WORLD_JAVA <<EOF
+// auto-generated
 public class Bench_HelloWorld {
     public static void main(String args[]) {
       System.out.println("Hello World");
