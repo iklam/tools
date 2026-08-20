@@ -1,0 +1,77 @@
+[1] California State Waters Map Series Data Catalog
+    https://pubs.usgs.gov/ds/781/
+
+[2] Navigate to GIS Data URL like
+    https://cmgds.marine.usgs.gov/data/csmp/MontereyCanyon/data_catalog_MontereyCanyon.html
+
+[3] Download "Seafloor Character" ZIP files such as:
+
+    Seafloor Character (2m/pixel), Monterey Canyon and Vicinity map area
+    https://www.sciencebase.gov/catalog/file/get/556f92cae4b0d9246a9fd0c2
+
+    Seafloor Character (5m/pixel), Monterey Canyon and Vicinity map area
+    https://www.sciencebase.gov/catalog/file/get/55708254e4b0d9246a9fd23f
+
+[4] Extract the ZIP file and get basic info (example, the 2m/pixel ZIP from [3]):
+
+    $ gdalinfo SeafloorCharacter_2m_MontereyCanyon.tif > SeafloorCharacter_2m_MontereyCanyon.tif.info
+
+    #----------------
+    USAGE[
+        SCOPE["Engineering survey, topographic mapping."],
+        AREA["North America - between 126°W and 120°W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+        BBOX[30.54,-126,81.8,-119.99]],
+    ID["EPSG",26910]]
+    Data axis to CRS axis mapping: 1,2
+    Origin = (579999.999999995226972,4099999.999999403022230)
+    Pixel Size = (2.000000000000000,-2.000000000000000)
+    #----------------
+
+   Summary - it uses EPSG 26910
+
+[5] Fix the pixel colors --> Monterey_2m_fixed.jpg
+
+    java FixColors.java SeafloorCharacter_2m_MontereyCanyon.tif Monterey_2m_fixed.jpg
+
+[4] Recreate the GeoTIFF file (but with fixed colors) --> Monterey_2m_fixed.tif
+
+    cp SeafloorCharacter_2m_MontereyCanyon.tif Monterey_2m_fixed.tfw
+    gdal_translate -a_srs EPSG:26910 Monterey_2m_fixed.jpg Monterey_2m_fixed.tif
+
+    gdalinfo SeafloorCharacter_2m_MontereyCanyon.tif > SeafloorCharacter_2m_MontereyCanyon.tif.info
+    gdalinfo Monterey_2m_fixed.tif > Monterey_2m_fixed.tif.info
+
+    Make sure the following are the same in both .info files
+
+
+    Data axis to CRS axis mapping: 1,2
+    Origin = (579999.999999995226972,4099999.999999403022230)
+    Pixel Size = (2.000000000000000,-2.000000000000000)
+    Corner Coordinates:
+
+    Upper Left  (  580000.000, 4100000.000) (122d 6' 1.39"W, 37d 2'34.12"N)
+    Lower Left  (  580000.000, 4060668.000) (122d 6'16.32"W, 36d41'17.85"N)
+    Upper Right (  612742.000, 4100000.000) (121d43'56.17"W, 37d 2'22.02"N)
+    Lower Right (  612742.000, 4060668.000) (121d44'17.20"W, 36d41' 5.90"N)
+    Center      (  596371.000, 4080334.000) (121d55' 7.78"W, 36d51'50.49"N)
+
+[5] Wrap the tif file to 3857 as required by mbtiles --> Monterey_2m_fixed_warped.tif
+
+    gdalwarp -s_srs EPSG:26910 -t_srs EPSG:3857 -r bilinear Monterey_2m_fixed.tif  Monterey_2m_fixed_warped.tif
+    ls -l Monterey_2m_fixed_warped.tif
+    -rw-rw-r-- 1 iklam iklam 987360331 Aug 19 18:05 Monterey_2m_fixed_warped.tif
+
+[6] Add levels into Monterey_2m_fixed_warped.tif (same file)
+
+     gdaladdo -r average Monterey_2m_fixed_warped.tif 10 11 12 13 14 15 16
+     ls -l Monterey_2m_fixed_warped.tif
+     -rw-rw-r-- 1 iklam iklam 1034553230 Aug 19 18:08 Monterey_2m_fixed_warped.tif
+
+[7] Create mbtiles file
+
+    # (old) gdal_translate -of MBTILES -co TILE_FORMAT=JPEG -co QUALITY=85  Monterey_2m_fixed_warped.tif Monterey_2m_fixed_warped.mbtiles
+
+    gdal_translate -of MBTILES -co TILE_FORMAT=PNG -co ZOOM_LEVEL_STRATEGY=UPPER \
+        Monterey_2m_fixed_warped.tif Monterey_2m_fixed_warped.mbtiles
+
+    gdaladdo -r bilinear Monterey_2m_fixed_warped.mbtiles 2 4 8 16 32 64
