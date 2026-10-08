@@ -7,51 +7,37 @@ import java.util.*;
 public class FixColors {
     record Info (int pixel, int slope, int depth, int substrate, int color, String info) {}
     static Info[] infos = new Info[256];
-
     static {
         Info src[] = {
+            // zone 2 = intertidal ~ 30m
             new Info( 1,   1, 2, 1, 0x91b694, "Fine to medium grained smooth sediment"),
             new Info( 2,   1, 2, 2, 0xc1c694, "Mixed smooth sediment and rock"),
             new Info( 3,   1, 2, 3, 0xb77f83, "Rock and boulders, rugose"),
             new Info( 4,   1, 2, 4, 0xad955b, "Medium to coarse grained, rippled sediment"),
 
+            // zone 3 = 30m ~ 100m
             new Info(11,   1, 3, 1, 0x538563, "Fine to medium grained smooth sediment"),
             new Info(12,   1, 3, 2, 0xbdb285, "Mixed smooth sediment and rock"),
             new Info(13,   1, 3, 3, 0x8c4c54, "Rock and boulders, rugose"),
             new Info(14,   1, 3, 4, 0xcdca12, "Medium to coarse grained, rippled sediment"),
 
-            new Info(51,   2, 2, 1, 0x65c07f, "Fine to medium grained smooth sediment"),
-            new Info(52,   2, 2, 2, 0xad955b, "Mixed smooth sediment and rock"),
-            new Info(53,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
+            // zone 4 = 100m ~ 200m
+            new Info(21,   1, 4, 1, 0x38794d, "Fine to medium grained smooth sediment"),
+            new Info(22,   1, 4, 2, 0xaa9b51, "Mixed smooth sediment and rock"),
+            new Info(23,   1, 4, 3, 0x762933, "Rock and boulders, rugose"),
+            new Info(24,   1, 4, 4, 0x97950d, "Medium to coarse grained, rippled sediment"),
 
-            new Info(61,   2, 3, 1, 0x72a64c, "Fine to medium grained smooth sediment"),
-            new Info(62,   2, 3, 2, 0xba8737, "Mixed smooth sediment and rock"),
-            new Info(63,   2, 3, 3, 0xa3386f, "Rock and boulders, rugose"),
+            // zone 5 > 200m
+            new Info(31,   1, 5, 1, 0x196230, "Fine to medium grained smooth sediment"),
+            new Info(32,   1, 5, 2, 0x75662b, "Mixed smooth sediment and rock"),
+            new Info(33,   1, 5, 3, 0x711520, "Rock and boulders, rugose"),
+            new Info(34,   1, 5, 4, 0xcdca12, "Medium to coarse grained, rippled sediment"),
 
-            //new Info(128,  0, 0, 0, 0x000000, "none"),
-            new Info( 21,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 22,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 23,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-
-            new Info( 31,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 32,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-
-            new Info( 64,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 71,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 72,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 73,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 74,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-
-            new Info( 81,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 82,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info( 83,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-
-            new Info(121,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info(122,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info(123,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info(131,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info(132,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
-            new Info(133,   2, 2, 3, 0xd18bc2, "Rock and boulders, rugose"),
+            // What is this zone???
+            new Info(41,   1, 6, 1, 0x538563, "Fine to medium grained smooth sediment"), // << need fix
+            new Info(42,   1, 6, 2, 0xbdb285, "Mixed smooth sediment and rock"), // << need fix
+            new Info(43,   1, 6, 3, 0x8c4c54, "Rock and boulders, rugose"), // << need fix
+            new Info(44,   1, 6, 4, 0xcdca12, "Medium to coarse grained, rippled sediment"), // << need fix
         };
         for (Info i : src) {
             infos[i.pixel] = i;
@@ -119,13 +105,24 @@ public class FixColors {
         for (int i = 0; i < width * height; i++) {
             int input = inputPixels[i] & 0xFF;
 
+            input %= 50;
+
             int r = 0;
             int g = 0;
             int b = 0;
             int a = 0;
 
-            if (input != 0) {
-                int type = input % 10;
+            Info info = infos[input];
+            int type = input % 10;
+
+            if (info != null) {
+                int color = info.color;
+                r = color >> 16;
+                g = color >> 8;
+                b = color >> 0;
+                a = 0xff;
+                found[type] ++;
+            } else if (input != 0) {
                 int color;
                 switch (type) {
                 case 1: color = 0x91b694; break; // Fine to medium grained smooth sediment
@@ -138,7 +135,7 @@ public class FixColors {
                 g = color >> 8;
                 b = color >> 0;
                 a = 0xff;
-                found[type] ++;
+                found[input] ++;
             } else {
                 notfound[input] ++;
             }

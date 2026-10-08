@@ -7,6 +7,8 @@
 #<Name>SUBST_DESC</Name>
 #<Name>FULL_DESC</Name>
 
+puts "value, slope, depth_zone, substrate, desc"
+
 set data [read stdin]
 regsub -all "<Row index=" $data \uffff data
 set n 0
