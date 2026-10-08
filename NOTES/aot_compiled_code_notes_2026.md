@@ -9,7 +9,7 @@ This is last updated around 2026/05/26. It may be out-of-date by the time you re
 ## 1. Setup
 
 - Get the draft PR from https://github.com/openjdk/jdk/pull/30778
-
+  
   Note: a new PR may be created when the JEP is integrated into the JDK mainline. 
   Please look for it first.
 
@@ -17,7 +17,6 @@ This is last updated around 2026/05/26. It may be out-of-date by the time you re
   for "build hsdis-amd64.so", etc. If you are using Linux/x64, see https://medium.com/ayte-io/building-hsdis-amd64-so-hsdis-i386-so-for-linux-ec51593a9318
 
 - On linux, you need to `export LD_LIBRARY_PATH=/path/to/hsdis`
-
 
 ## 2. Inspect JIT compiled method
 
@@ -66,16 +65,15 @@ $ time java -cp IntLoop.jar IntLoop
 counter = 0x7a7a0000
 counter = 0x7a7a0000
 
-real	0m0.034s
-user	0m0.022s
-sys 	0m0.017s
+real    0m0.034s
+user    0m0.022s
+sys     0m0.017s
 
 $ java -XX:+UnlockDiagnosticVMOptions '-XX:CompileCommand=print,IntLoop::*' -cp IntLoop.jar IntLoop > log.txt
 ```
 
 You can see the JIT has reduced the loop into a constant "add". My comments are marked with `;;` in the assembly listing.
 You can see the loop is reduced to a constant. For some reason, C2 compiles the constant into `0x7a7a79 + 1`.
-
 
 ```
 ============================= C2-compiled nmethod ==============================
@@ -147,7 +145,6 @@ Compiled method (c2) 23   21         4       IntLoop::test (32 bytes)
 
 ## 2. Inspect AOT compiled method
 
-
 First, do a training run and record the execution profile
 
 ```
@@ -164,7 +161,6 @@ java -cp IntLoop.jar -XX:AOTMode=create -XX:AOTConfiguration=app.config -XX:AOTC
 ```
 
 From the log, look for the `test` method:
-
 
 ```
 ============================= C2-compiled nmethod ==============================
@@ -267,7 +263,6 @@ Compiled method (c2) 253  298      AP 4       IntLoop::test (32 bytes)
 [Deopt Handler Entry Point]
   0x000077f5ab2a465d:   jmp    0x000077f5ab2a4658
   0x000077f5ab2a465f:   hlt    
-
 ```
 
 Start time is improved:  0m0.034s -> 0m0.013s
@@ -277,18 +272,17 @@ $ time java -cp IntLoop.jar -XX:AOTCache=app.aot IntLoop
 counter = 0x7a7a0000
 counter = 0x7a7a0000
 
-real	0m0.013s
-user	0m0.011s
-sys 	0m0.009s
+real    0m0.013s
+user    0m0.011s
+sys     0m0.009s
 ```
 
 Compared to mainline JDK (AOT cache, without AOT-compiled methods)
 
 ```
-real	0m0.018s
-user	0m0.015s
-sys 	0m0.012s
+real    0m0.018s
+user    0m0.015s
+sys     0m0.012s
 ```
 
 --> Faster start-up, less system time due to fewer JIT compilation (note: unscientific measurement)
-

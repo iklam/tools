@@ -161,13 +161,26 @@ public class HelloController {
         return Crypto.encrypt("ok");
     }
 
+    static long started = System.currentTimeMillis();
+    static long accum = 0;
     static void serverSideUpdateFile(File baseDir, FileInfo fi) throws Exception {
         File f = new File(baseDir, fi.file);
         Util.prepareDirectoryFor(f);
         boolean append = fi.offset > 0;
         try (FileOutputStream fos = new FileOutputStream(f, append)) {
             byte[] data = Base64.getDecoder().decode(fi.data);
-	    System.out.println("Updating: " + f + "@" + fi.offset + "[" + data.length + "]");
+            String speed = "";
+            accum += data.length;
+            if (accum > 1000000) {
+                long elapsed = System.currentTimeMillis() - started;
+                if (elapsed > 0) {
+                    speed = String.format(" : (%d) %.2f KB/s", elapsed, (accum * 1.0 / elapsed));
+                }
+                accum = 0;
+                started = System.currentTimeMillis();
+            }
+
+	    System.out.println("Updating: " + f + "@" + fi.offset + "[" + data.length + speed + "]");
             fos.write(data);
         }
         f.setLastModified(fi.modTime);
@@ -1030,7 +1043,7 @@ class CommandLine {
         return start + n;
     }
 
-    static final int CHUNK_LIMIT = 1 * 1024 * 1024;
+    static final int CHUNK_LIMIT = 4 * 1024 * 1024;
     static StringBuilder flushChunk(String url, String remoteDir, StringBuilder sb, boolean force) throws Exception { 
         if (sb.length() >= CHUNK_LIMIT || force) {
             String post = sb.toString();

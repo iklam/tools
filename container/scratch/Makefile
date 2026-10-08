@@ -14,6 +14,18 @@ myapp: myapp.c
 	ldd myapp
 
 dock: myapp
+	mkdir from/bin
+	cp /bin/ls myapp from/bin
+	bash make-dockerfile.sh bin/ls /bin/myapp
+	mkdir -p lib/x86_64-linux-gnu
+	mkdir -p lib64
+	cp /lib/x86_64-linux-gnu/libc.so.6 lib/x86_64-linux-gnu
+	cp /lib64/ld-linux-x86-64.so.2 lib64
+	docker build -t demo-app:0.1-scratch -f Dockerfile .
+	docker image ls demo-app:0.1-scratch
+
+# Hard-code the shared libs for 
+olddock: myapp
 	mkdir -p lib/x86_64-linux-gnu
 	mkdir -p lib64
 	cp /lib/x86_64-linux-gnu/libc.so.6 lib/x86_64-linux-gnu

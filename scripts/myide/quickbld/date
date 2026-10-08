@@ -1,0 +1,7 @@
+#! /bin/tclsh
+
+if {"$argv" == "+%s"} {
+    puts [expr [clock seconds] / 86400 * 86400]
+} else {
+    exec /bin/date 2>@ stderr >@ stdout
+}
