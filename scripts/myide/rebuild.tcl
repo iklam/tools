@@ -16,6 +16,8 @@ if {[file exists hotspot/variant-server/] || [file exists hotspot/variant-minima
 }
 
 proc read_cmdline {cmdline file replace} {
+    global env
+
     set fd [open $cmdline]
     set data [string trim [read $fd]]
     close $fd
@@ -50,6 +52,10 @@ proc read_cmdline {cmdline file replace} {
         regsub $srcpat $data " $src " data
     }
 
+    if {[info exists env(RE_TMP_CPP)]} {
+        regsub {[.]cpp } $data {.cpp.tmp.cpp } data
+    }
+
     puts "Rebuilding $file.o ..."
     puts "\t$data"
 
@@ -80,11 +86,14 @@ proc read_cmdline {cmdline file replace} {
 }
 
 proc find_any_cmdline {} {
-    foreach file [lsort [glob -nocomplain hotspot/variant-*/libjvm/objs/*.o.cmdline]] {
+    foreach file [lsort [glob -nocomplain hotspot/variant-*/libjvm/objs/*.o.cmdline hotspot/variant-*/libjvm/gtest/objs/*.o.cmdline]] {
         set fd [open $file]
         set data [read $fd]
         close $fd
         if {[regexp {src/hotspot/share/[^ ]+.cpp } $data]} {
+            return $file
+        }
+        if {[regexp {test/hotspot/gtest/[^ ]+.cpp } $data]} {
             return $file
         }
     }

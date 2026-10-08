@@ -27,7 +27,9 @@ alias gitweb='tclsh ${IOIGIT}/scripts/scm/gitweb.tcl'
 alias gitswtc='git switch --track=direct -c'
 alias grepjar='tclsh ${IOIGIT}/scripts/misc/grepjar.tcl'
 alias gittodos='gitdiffgrep master "(TODO)|(FIXME)"'
-
+alias gitclean='(set -x; cd00 && git clean -fdn && cdo && git clean -fdn)'
+alias gitcleanx='(set -x; cd00 && git clean -fd && cdo && git clean -fd)'
+alias gitdiff='tclsh ${IOIGIT}/scripts/scm/gitdiff.tcl'
 
 function gitdiffgrep () {
     local pat=$1
@@ -67,13 +69,15 @@ function is-in-leyden () {
 }
 
 function git-refresh () {
-    if is-in-leyden; then
+    if test $(pwd) = /jdk3/repo.mainline; then
+        local parent=master
+    elif is-in-leyden; then
         local parent=premain
     else
         local parent=master
     fi
 
-    if git branch | grep -q "[*] $parent"; then
+    if git branch | egrep -q "[*] $parent"; then
     (
         (set -x; git branch) || return;
         (set -x; git status) || return;
@@ -350,23 +354,35 @@ function cdsrun () {
             ;;
         preload01)
             # JEP 514
-            cmd="$cmd -XX:AOTMode=record -XX:AOTCacheOutput=$testname.aot -Xlog:cds"
+            cmd="$cmd -XX:AOTCacheOutput=${testname}1.aot"
+            ;;
+        preload34)
+            # One step retraining
+            cmd="$cmd -XX:AOTCache=${testname}1.aot -XX:AOTCacheOutput=${testname}2.aot"
             ;;
         preload0)
             # old0 = old workflow: dump classlist for static archive
-            cmd="$cmd -XX:AOTMode=record -XX:AOTConfiguration=$testname.aotconfig"
+            cmd="$cmd -XX:AOTMode=record -XX:AOTConfiguration=${testname}1.aotconfig"
             ;;
         preload1)
             # Preload 1 = old static workflow with class preloading: dump static archive
-            cmd="$cmd -XX:AOTMode=create $LOG_CDS -XX:AOTCache=$testname.aot -XX:AOTConfiguration=$testname.aotconfig"
+            cmd="$cmd -XX:AOTMode=create $LOG_CDS -XX:AOTCache=${testname}1.aot -XX:AOTConfiguration=${testname}1.aotconfig"
             ;;
         preload2)
             # Preload 2 = old static workflow with class preloading: run with static archive
-            cmd="$cmd -XX:AOTMode=on -XX:AOTCache=$testname.aot"
+            cmd="$cmd -XX:AOTMode=on -XX:AOTCache=${testname}1.aot"
             ;;
         preload3)
             # Preload 3 = re-train with an existing AOT cache
-            cmd="$cmd -XX:AOTMode=record -XX:AOTConfiguration=$testname.aotconfig -XX:AOTCache=$testname.aot"
+            cmd="$cmd -XX:AOTMode=record -XX:AOTConfiguration=${testname}2.aotconfig -XX:AOTCache=${testname}1.aot"
+            ;;
+        preload4)
+            # Preload 4 = create AOT cache from retraining
+            cmd="$cmd -XX:AOTMode=create $LOG_CDS -XX:AOTCache=${testname}2.aot -XX:AOTConfiguration=${testname}2.aotconfig"
+            ;;
+        preload5)
+            # Preload 5 = use AOT cache from retraining
+            cmd="$cmd -XX:AOTMode=on -XX:AOTCache=${testname}2.aot"
             ;;
         dynamic0)
             # Dynamic 0 = old dynamic workflow : dump dynamic archive
@@ -429,10 +445,13 @@ function cdsrun-define () {
 
     # Preloaded (static)
     alias ${testname}p01="$run preload01"
+    alias ${testname}p34="$run preload34"
     alias ${testname}p0="$run preload0"
     alias ${testname}p1="$run preload1"
     alias ${testname}p2="$run preload2"
     alias ${testname}p3="$run preload3"
+    alias ${testname}p4="$run preload4"
+    alias ${testname}p5="$run preload5"
 
     # Dynamic
     alias ${testname}d0="$run dynamic0"
@@ -450,9 +469,11 @@ function cdsrun-define () {
 }
 
 cdsrun-define vv "" --version
+cdsrun-define cs ~/tmp/CodeSourceTest.jar CodeSourceTest
 cdsrun-define hw ~/tmp/HelloWorld.jar HelloWorld
 cdsrun-define hc ~/tmp/HelloCustom.jar HelloCustom
 cdsrun-define hl ~/tmp/HelloLambda.jar HelloLambda
+cdsrun-define ll ~/tmp/LambdaLoop.jar LambdaLoop
 cdsrun-define lm ~/tmp/LambdaMisc.jar LambdaMisc
 cdsrun-define mh ~/tmp/HelloMH.jar HelloMH
 cdsrun-define mu ~/tmp/MathUtilsTest.jar MathUtilsTest
@@ -465,7 +486,106 @@ cdsrun-define xx ~/tmp/jdk-8290417/test.jar Test
 cdsrun-define mt ~/tmp/MyTest.jar MyTest
 cdsrun-define oc ~/tmp/OldClass.jar OldClass
 cdsrun-define pk ~/tmp/PackageTest.jar test.pkg.PackageTest
-cdsrun-define md "" "-p ${HOME}/tmp/modules/ioi/app.jar:${HOME}/tmp/modules/ioi/dir -m app/app.Main"
+cdsrun-define jb ~/tmp/JavacBenchApp.jar JavacBenchApp
+cdsrun-define jb2 ~/tmp/JavacBench2.jar JavacBench2
 cdsrun-define jc "" "com.sun.tools.javac.Main -d . ~/tmp/HelloWorld.java"
 cdsrun-define ss $TESTBED/demo/jfc/SwingSet2/SwingSet2.jar SwingSet2
 cdsrun-define rxc ~/tmp/ReflectExcludedClass.jar ReflectExcludedClass
+cdsrun-define wt ~/tmp/Wait.jar Wait
+
+# module debug
+cdsrun-define md "" "-p ${HOME}/tmp/modules/HelloModule.jar -m moda"
+
+
+#https://superuser.com/questions/1819802/linux-how-to-suppress-listing-loop-devices-when-using-mount-command
+alias mounts='lsblk -f | grep -v snap'
+
+# Do this only if the current branch is not "master"
+#
+# You can also reset the "master" branch to an earlier commit like this
+# cd00; git branch -f master 612cc9cdeb3b995a5716869830f6c60fd61c5730
+function gitfetchclosed0 () {
+    cd00
+    git fetch mainline master:remotes/origin/master
+    git fetch mainline master:origin/master
+    git log -1 master
+}
+
+function gitfetchclosed () {
+    cd00
+    git fetch mainline master:remotes/origin/master
+    git log -1 origin/master
+    echo ========================================
+    git log -1 master
+    echo ========================================
+    gitbh
+}
+
+function gitfetchclosed2 () {
+    git merge origin/master
+}
+
+function gitfetchmaster () {
+    git fetch upstream master:master
+    git push origin master:master
+}
+
+
+#----------------------------------------------------------------------
+# Leyden merging
+#----------------------------------------------------------------------
+
+# MAIN_OLD     ->     MAIN_NEW   -----------------------+
+#           \                                           |
+#            \                                          |
+# LEYDEN_OLD  +-  LEYDEN_LAST_MERGE   ---> LEYDEN_NEW --+==> merge
+
+
+export MAIN_OLD=0540e980ef556140c07c4416ce397ff002422842
+export MAIN_NEW=8378d289104a60faa0c9ee048dc299fa7ea2c06e
+export LEYDEN_OLD=929e793cb33b26bcf6b73c8fab72b6177a99be46
+export LEYDEN_LAST_MERGE=b05d0ffd8c7430b2dfcf1577dae462efe525ab98
+export LEYDEN_NEW=d45e449baa89f3bd15152701c1c12afce4174719
+
+# What has changed in mainline since last merge
+function xxdm () {
+    (tkdiff -r $MAIN_OLD -r $MAIN_NEW $@ 2>&1 &) > /tmp/xxdm
+}
+
+# What has changed in leyden SINCE last merge
+function xxdl () {
+    (tkdiff -r $LEYDEN_LAST_MERGE -r $LEYDEN_NEW $@ 2>&1 &) > /tmp/xxdl
+}
+
+# What has changed in leyden AT last merge
+function xxdo () {
+    (tkdiff -r $MAIN_OLD -r $LEYDEN_LAST_MERGE $@ 2>&1 &) > /tmp/xxdo
+}
+
+# Latest diff after merged from mainline
+function xxdn () {
+    (tkdiff -r $MAIN_NEW $@ 2>&1 &) > /tmp/xxdn
+}
+
+function meldgit () {
+    if test -f "$1"; then
+        local version=78df5077804cc9ccc65f7862bcb548918e7e3ddc
+        git show 78df5077804cc9ccc65f7862bcb548918e7e3ddc:$1 > $1.tmp
+        meld $1.tmp $1
+        rm $1.tmp
+    fi
+}
+
+function notes () {
+  src/hotspot/share/cds/aotMappedHeapWriter.cpp
+x src/hotspot/share/cds/heapShared.cpp
+x src/hotspot/share/cds/heapShared.hpp
+x src/hotspot/share/interpreter/interpreterRuntime.cpp
+x src/java.base/share/classes/java/lang/reflect/Proxy.java
+x test/hotspot/jtreg/runtime/cds/appcds/aotCache/ExcludedClasses.java
+}
+
+alias rzz='resize -s 30 90'
+
+alias no_log_cds='export NO_LOG_CDS=1'
+alias yes_log_cds='unset NO_LOG_CDS'

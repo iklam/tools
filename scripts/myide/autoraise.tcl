@@ -27,10 +27,6 @@ checkbutton .s.c -text "Tksvn" -width 6 -anchor w -variable s -command "docheck 
 button .s.b -text "Raise" -width 6 -command {xraise tksvn 1}
 pack .s.c .s.b -side left -fill y
 
-set e 1
-set t 1
-set s 1
-
 frame .cmd
 pack .cmd -side top -expand yes -fill x
 button .cmd.buf -text buf -command exec_buf
@@ -49,8 +45,15 @@ proc docheck {which} {
     } else {
         exec touch $file
     }
+    #puts $which-[file exists $file]
 }
+set e 1
+set t 1
+set s 1
 
+docheck e
+docheck t
+docheck s
 
 set terminal_pid -1
 set focused_terminal_wid -1

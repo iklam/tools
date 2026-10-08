@@ -1519,7 +1519,7 @@ proc ioi-emacs-edit {text} {
             set file $finfo(pth,2)
             if {[catch {
                 #puts [pwd]
-                exec tclsh $env(IOISVN)/scripts/qq.tcl $file:$index
+                exec tclsh $env(IOIGIT)/scripts/myide/qq.tcl $file:$index
                 xraise emacs23 1
             } err]} {
                 puts $err
@@ -10072,6 +10072,7 @@ proc receive_tksvn {fd} {
         check_autoraise
         #wm deiconify .
         #grab release .
+        focus_me
     }
 }
 

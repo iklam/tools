@@ -17,7 +17,7 @@ foreach pat $locations {
                         #if {"$b" == "master" || "$b" == "lworld"} {
                         #    continue
                         #}
-                        set log [exec git log -1 $b]
+                        set log [exec bash -c "git log -1 $b 2>&1; true"]
                         set date 0
                         catch {
                             regexp "Date:\[^ \t\]*(\[^\n\]+)" $log dummy date
@@ -38,7 +38,8 @@ foreach pat $locations {
                 }
             } xx]} {
                 puts [pwd]
-                puts $xx
+                puts --$xx--
+                puts $errorInfo
                 exit 1
             }
             cd $PWD

@@ -10,6 +10,7 @@ proc xraise {name {force 0}} {
 
     if {!$force} {
         if {$name == "emacs23" && ![file exists /tmp/autoraise-e]} {
+            puts "/tmp/autoraise-e not exist"
             return 0
         }
         if {$name == "tkdiff" && ![file exists /tmp/autoraise-t]} {

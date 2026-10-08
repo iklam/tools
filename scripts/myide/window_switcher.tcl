@@ -90,10 +90,11 @@ proc update {args} {
     }
 }
 
+set last_activated_time 0
 proc activate {id} {
-    global show_cover_after last_used last_activated
+    global show_cover_after last_used last_activated last_activated_time
 
-    if {$id == $last_activated} {
+    if {$id == $last_activated && [clock seconds] - $last_activated_time < 2} {
         catch {
             exec xdotool windowminimize $id
         }
@@ -103,6 +104,7 @@ proc activate {id} {
             exec xdotool windowactivate $id
         }
         set last_activated $id
+        set last_activated_time [clock seconds]
     }
 
     catch {

@@ -9,6 +9,7 @@
 source [file dirname [info script]]/../lib/common.tcl
 
 set hide_others [pop_arg h]
+set resize [pop_arg r]
 
 set title [lindex $argv 0]
 
