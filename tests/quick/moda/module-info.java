@@ -1,0 +1,3 @@
+module moda {
+  exports moda;
+}
